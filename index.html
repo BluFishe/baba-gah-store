@@ -637,7 +637,7 @@ function createBottleViewer(canvas, opts = {}) {
   spinGroup.add(obj);
   scene.add(tiltGroup);
   if (spinning && !labelFallback) tiltGroup.rotation.z = THREE.MathUtils.degToRad(20);   // mobile stays upright
-  let decalLocalDir = null;
+  let decalLocalDir = null, labelBaseAngle = 0, spinPhase = 0;
 
   const bodyBox = new THREE.Box3().setFromObject(bodyMesh || obj);
 
@@ -776,10 +776,12 @@ function createBottleViewer(canvas, opts = {}) {
     const localDir = dir.clone().applyQuaternion(dq.clone().invert()).normalize();
     decalLocalDir = labelFallback ? null : localDir;
     if (labelFallback) {
-      // Static product shot: rotate the bottle so the label faces the camera → centered.
+      // Rotate the bottle so the label faces the camera; the gentle turn in animate()
+      // oscillates around this so the label stays centered (never sweeps to the back).
       const camAng = Math.atan2(camera.position.z, camera.position.x);
       const locAng = Math.atan2(localDir.z, localDir.x);
-      spinGroup.rotation.y = locAng - camAng;
+      labelBaseAngle = locAng - camAng;
+      spinGroup.rotation.y = labelBaseAngle;
       spinGroup.updateWorldMatrix(true, false);
     }
   }
@@ -815,10 +817,16 @@ function createBottleViewer(canvas, opts = {}) {
     if (disposed) return;
     const dt = spinClock.getDelta();
     if (spinning) {
-      spinGroup.rotation.y += 0.8 * dt;            // tilted-axis spin
-      if (decalLocalDir) {                          // keep the label's front-clip aligned as it turns
-        spinGroup.getWorldQuaternion(_q);
-        labelDirU.value.copy(decalLocalDir).applyQuaternion(_q);
+      spinPhase += dt;
+      if (labelFallback) {
+        // Gentle turn that keeps the label facing the camera (never sweeps to the back).
+        spinGroup.rotation.y = labelBaseAngle + 0.55 * Math.sin(spinPhase * 0.7);
+      } else {
+        spinGroup.rotation.y += 0.8 * dt;          // desktop: full tilted-axis spin
+        if (decalLocalDir) {                        // keep the label's front-clip aligned as it turns
+          spinGroup.getWorldQuaternion(_q);
+          labelDirU.value.copy(decalLocalDir).applyQuaternion(_q);
+        }
       }
     }
     controls.update();
