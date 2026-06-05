@@ -1837,13 +1837,16 @@ function BottleView({
     interactive,
     autoRotate
   });
+  // Display-only bottle: ignore pointers so swipes scroll the page (OrbitControls
+  // otherwise sets touch-action:none on the canvas and captures the gesture).
   return /*#__PURE__*/React.createElement("canvas", {
     ref: ref,
     style: {
       width: '100%',
       height: '100%',
       display: 'block',
-      cursor: interactive ? 'grab' : 'default'
+      cursor: interactive ? 'grab' : 'default',
+      pointerEvents: interactive ? 'auto' : 'none'
     }
   });
 }
