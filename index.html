@@ -57,7 +57,7 @@ body:not(.rock-native) #rockScroll { display: none; }
   background: none; border-bottom: none;
 }
 .nav-logo { height: 30px; opacity: 1; cursor: pointer; }
-.nav-wordmark { height: 32px; opacity: 1; display: none; filter: drop-shadow(1px 1px 0 #8c0f1c) drop-shadow(1.5px 1.5px 0 #6b0b16) drop-shadow(0 2px 2px rgba(0,0,0,0.4)); }
+.nav-wordmark { width: 168px; height: 46px; opacity: 1; display: none; cursor: pointer; }
 .nav-links { display: flex; gap: 6px; }
 .nav-link {
   background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); cursor: pointer;
@@ -284,8 +284,7 @@ body:not(.rock-native) #rockScroll { display: none; }
 @media (max-width: 759px) {
   .nav-mark {
     display: block; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    width: 128px; height: auto; cursor: pointer;
-    filter: drop-shadow(1px 1px 0 #8c0f1c) drop-shadow(2px 2px 0 #6b0b16) drop-shadow(0 3px 2px rgba(0,0,0,0.45));
+    width: 170px; height: 50px; cursor: pointer;
   }
 }
 .eyebrow { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #fff; opacity: 1; font-weight: 800; margin-bottom: 14px; font-family: var(--body); }
@@ -957,8 +956,71 @@ function createChalkViewer(canvas, opts = {}) {
   };
 }
 
+// Standalone spinning red 3D "baba-gah" wordmark (same extruded look as the idol's
+// orbiting ring) — used in the nav in place of the flat SVG.
+function createWordmarkViewer(canvas, opts = {}) {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  const scene = new THREE.Scene();
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  const camera = new THREE.PerspectiveCamera(26, 4, 1, 4000);
+  const key = new THREE.DirectionalLight(0xfff4e6, 1.35); key.position.set(3, 5, 6); scene.add(key);
+  const rim = new THREE.DirectionalLight(0xffd0d8, 0.5); rim.position.set(-4, 2, 3); scene.add(rim);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+
+  let mark = null, mw = 1, mh = 1;
+  try {
+    const paths = new SVGLoader().parse(window.BABA_WORDMARK_SVG).paths;
+    const shapes = [];
+    paths.forEach(p => SVGLoader.createShapes(p).forEach(s => shapes.push(s)));
+    let g = new THREE.ExtrudeGeometry(shapes, { depth: 44, bevelEnabled: true, bevelThickness: 7, bevelSize: 5, bevelSegments: 2, curveSegments: 6 });
+    g.scale(1, -1, 1);                                 // SVG y-down → up
+    g.computeBoundingBox();
+    const b = g.boundingBox; mw = b.max.x - b.min.x; mh = b.max.y - b.min.y;
+    g.translate(-(b.min.x + b.max.x) / 2, -(b.min.y + b.max.y) / 2, -(b.min.z + b.max.z) / 2);
+    g.deleteAttribute('normal'); g.deleteAttribute('uv');
+    g = BufferGeometryUtils.mergeVertices(g); g.computeVertexNormals();
+    const m = createChalkMaterial({ color: '#f82538', roughness: 0.82, metalness: 0 }); m.side = THREE.DoubleSide;
+    mark = new THREE.Mesh(g, m);
+    scene.add(mark);
+  } catch (e) { console.warn('wordmark', e); }
+
+  function frame() {
+    const a = camera.aspect, vF = camera.fov * Math.PI / 180;
+    const distH = (mh / 2 * 1.7) / Math.tan(vF / 2);
+    const distW = (mw / 2 * 1.16) / Math.tan(vF / 2) / a;
+    camera.position.set(0, 0, Math.max(distH, distW));
+    camera.lookAt(0, 0, 0);
+  }
+  let raf = 0, disposed = false;
+  function resize() {
+    const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h; camera.updateProjectionMatrix(); frame();
+  }
+  const ro = new ResizeObserver(resize); ro.observe(canvas);
+  if (canvas.parentElement) ro.observe(canvas.parentElement);
+  resize();
+
+  const clock = new THREE.Clock();
+  function animate() {
+    if (disposed) return;
+    raf = requestAnimationFrame(animate);
+    if (!canvas.clientWidth) return;                   // skip while hidden
+    const t = clock.getElapsedTime();
+    if (mark) { mark.rotation.y = 0.45 * Math.sin(t * 1.0); mark.rotation.x = 0.06 * Math.sin(t * 0.7); }
+    renderer.render(scene, camera);
+  }
+  animate();
+  return { dispose() { disposed = true; cancelAnimationFrame(raf); ro.disconnect(); renderer.dispose(); } };
+}
+
 window.__mountBottle = (canvas, opts) => createBottleViewer(canvas, opts);
 window.__mountChalk  = (canvas, opts) => createChalkViewer(canvas, opts);
+window.__mountWordmark = (canvas, opts) => createWordmarkViewer(canvas, opts);
 window.dispatchEvent(new Event('viewers-ready'));
 </script>
 
@@ -1759,6 +1821,19 @@ function ChalkView({
     }
   });
 }
+// Spinning red 3D wordmark (nav)
+function NavWordmark({
+  className,
+  onClick
+}) {
+  const ref = use3DViewer('__mountWordmark', {});
+  return /*#__PURE__*/React.createElement("canvas", {
+    ref: ref,
+    className: className,
+    onClick: onClick,
+    "aria-label": "baba-gah"
+  });
+}
 // Behind-the-frame model: its canvas lives in #model-layer (between sky and rock),
 // tracks its parent panel's rect and is oversized by `expand` so its rectangular
 // edges hide behind the frayed rock border and it appears set into the window.
@@ -1891,13 +1966,9 @@ function Nav({
     src: "baba-logo.svg",
     alt: "baba-gah",
     className: "nav-logo"
-  }), /*#__PURE__*/React.createElement("img", {
-    src: "babagah-red.svg",
-    alt: "baba-gah",
+  }), /*#__PURE__*/React.createElement(NavWordmark, {
     className: "nav-wordmark"
-  })), /*#__PURE__*/React.createElement("img", {
-    src: "babagah-red.svg",
-    alt: "baba-gah",
+  })), /*#__PURE__*/React.createElement(NavWordmark, {
     className: "nav-mark",
     onClick: scrollToTop
   }), /*#__PURE__*/React.createElement("button", {
