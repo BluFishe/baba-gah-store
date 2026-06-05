@@ -989,15 +989,15 @@ function createWordmarkViewer(canvas, opts = {}) {
     g.translate(-(b.min.x + b.max.x) / 2, -(b.min.y + b.max.y) / 2, -(b.min.z + b.max.z) / 2);
     g.deleteAttribute('normal'); g.deleteAttribute('uv');
     g = BufferGeometryUtils.mergeVertices(g); g.computeVertexNormals();
-    const m = createChalkMaterial({ color: '#f82538', roughness: 0.82, metalness: 0 }); m.side = THREE.DoubleSide;
+    const m = createChalkMaterial({ color: '#c01428', roughness: 0.82, metalness: 0 }); m.side = THREE.DoubleSide;
     mark = new THREE.Mesh(g, m);
     scene.add(mark);
   } catch (e) { console.warn('wordmark', e); }
 
   function frame() {
     const a = camera.aspect, vF = camera.fov * Math.PI / 180;
-    const distH = (mh / 2 * 1.7) / Math.tan(vF / 2);
-    const distW = (mw / 2 * 1.16) / Math.tan(vF / 2) / a;
+    const distH = (mh / 2 * 1.42) / Math.tan(vF / 2);
+    const distW = (mw / 2 * 1.05) / Math.tan(vF / 2) / a;
     camera.position.set(0, 0, Math.max(distH, distW));
     camera.lookAt(0, 0, 0);
   }
