@@ -1,0 +1,2119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>baba-gah liquid chalk</title>
+<link href="./vendor/fonts.css" rel="stylesheet"><style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(140,155,175,0.3); border-radius: 3px; }
+html, body { height: 100%; }
+body { background: #0c0c0f; font-family: Arial, Helvetica, sans-serif; color: #fff; overflow: hidden; }
+
+#skyCanvas { position: fixed; top: -1px; left: -1px; width: calc(100vw + 2px); height: calc(100vh + 2px); z-index: 0; }
+#rockCanvas { position: fixed; top: -1px; left: -1px; width: calc(100vw + 2px); height: calc(100vh + 2px); z-index: 2; }
+#model-layer { position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+
+#app-root { position: fixed; inset: 0; z-index: 3; display: flex; flex-direction: column; }
+
+:root {
+  --stone-bg: rgba(14,16,20,0.65);
+  --stone-border: rgba(140,155,175,0.18);
+  --stone-border-light: rgba(160,175,195,0.28);
+  --stone-text: #ffffff;
+  --stone-text-dim: rgba(255,255,255,1);
+  --stone-text-bright: #ffffff;
+  --accent: #7eaadc;
+  --accent-bright: #9ec4f0;
+  --accent-dim: rgba(126,170,220,0.15);
+  --gold: #9ec4f0;
+  --gold-dim: rgba(126,170,220,0.12);
+  --display: 'EB Garamond', Garamond, Georgia, serif;
+  --body: Arial, Helvetica, sans-serif;
+}
+.cf { font-family: 'Noto Sans Cuneiform', serif; letter-spacing: 0.08em; color: rgba(205,209,214,0.5); text-shadow: 0 1px 1px rgba(0,0,0,0.22); }
+
+.rock-frame {
+  position: relative;
+  box-shadow: 0 6px 0 rgba(30,34,42,0.9), 0 8px 24px rgba(0,0,0,0.6), 0 2px 0 rgba(70,76,88,0.5) inset, 0 -3px 0 rgba(0,0,0,0.3) inset;
+}
+.rock-frame > canvas {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  z-index: 0; pointer-events: none; display: block;
+}
+.rock-frame > :not(canvas) { position: relative; z-index: 1; }
+.nav-wrap { z-index: 100; flex-shrink: 0; box-shadow: 0 -1px 8px rgba(0,0,0,0.5), 0 4px 24px rgba(0,0,0,0.32), 0 2px 0 rgba(70,76,88,0.5) inset, 0 -3px 0 rgba(0,0,0,0.3) inset; }
+.gallery-frame { border-radius: 4px; overflow: hidden; }
+.nav {
+  position: relative; z-index: 1;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; height: 56px;
+  background: none; border-bottom: none;
+}
+.nav-logo { height: 30px; opacity: 1; cursor: pointer; }
+.nav-wordmark { height: 32px; opacity: 1; display: none; filter: drop-shadow(1px 1px 0 #8c0f1c) drop-shadow(1.5px 1.5px 0 #6b0b16) drop-shadow(0 2px 2px rgba(0,0,0,0.4)); }
+.nav-links { display: flex; gap: 6px; }
+.nav-link {
+  background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); cursor: pointer;
+  font-family: var(--display); font-size: 14px; font-weight: 400;
+  color: var(--stone-text-dim); padding: 7px 16px; border-radius: 4px;
+  transition: all 0.2s;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 4px rgba(0,0,0,0.3);
+}
+.nav-link:hover { color: var(--stone-text); background: rgba(0,0,0,0.35); }
+.nav-link.active {
+  color: var(--gold); background: rgba(0,0,0,0.4);
+  border-color: rgba(140,180,220,0.25);
+  box-shadow: inset 0 1px 0 rgba(140,180,220,0.1), 0 2px 4px rgba(0,0,0,0.3), 0 0 12px rgba(140,180,220,0.08);
+}
+.bag-btn {
+  background: none; border: none; cursor: pointer; padding: 0; position: relative;
+  width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; transition: transform 0.15s;
+}
+.bag-btn:hover { transform: scale(1.08); }
+.bag-icon { width: 44px; height: 44px; object-fit: contain; display: block; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
+.bag-btn .count { position: absolute; top: 3px; right: 4px; }
+.bag-btn .count {
+  background: var(--accent); color: #fff; font-size: 10px; font-weight: 700;
+  min-width: 18px; height: 18px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center; padding: 0 4px;
+}
+
+.content { flex: 1; overflow-y: auto; overflow-x: hidden; position: relative; }
+.section { padding: 48px 32px; max-width: 960px; margin: 0 auto; }
+
+/* Panels that the shader carves around */
+.recess-panel {
+  background: none; border: none; border-radius: 0; padding: 28px;
+}
+.cut-panel {
+  background: none; border: none; border-radius: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+  color: rgba(160,175,195,0.25);
+}
+
+.hero { display: grid; grid-template-columns: 1fr; gap: 32px; padding: 40px 32px 48px; max-width: 960px; margin: 0 auto; }
+.hero-visual { aspect-ratio: 3/4; width: 100%; }
+.hero-text { display: flex; flex-direction: column; justify-content: center; }
+.hero h1 { font-family: var(--display); font-weight: 500; font-size: clamp(42px,8vw,78px); line-height: 0.92; color: var(--stone-text-bright); letter-spacing: -1px; margin-bottom: 20px; }
+.hero h1 em { font-style: italic; color: #598ce0; }
+.hero-kicker { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--stone-text-dim); margin-bottom: 20px; }
+.hero-tagline { font-family: var(--display); font-style: italic; font-size: 16px; color: var(--stone-text-dim); margin-bottom: 12px; line-height: 1.4; }
+.hero-desc { font-size: 14px; color: var(--stone-text-dim); line-height: 1.65; max-width: 400px; }
+.hero-cuneiform { margin-top: 20px; font-size: 20px; }
+
+.steps { display: flex; flex-direction: column; }
+.step { display: flex; gap: 16px; padding: 18px 0; border-bottom: 1px solid var(--stone-border); align-items: center; }
+.step:last-child { border-bottom: none; }
+.step-num {
+  flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; position: relative;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--display); font-weight: 700; font-size: 14px; color: #fff;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.55);
+  background: radial-gradient(circle at 34% 30%, #d4e6ff 0%, #9ec4f0 32%, #5d8ec9 64%, #27497a 100%);
+  box-shadow:
+    inset -1px -2px 3px rgba(10,30,60,0.55),
+    inset 1px 1px 2px rgba(220,235,255,0.5),
+    inset 0 0 0 0.5px rgba(180,210,245,0.35),
+    0 2px 5px rgba(0,0,0,0.45);
+}
+.step-num::after {
+  content: ''; position: absolute; top: 13%; left: 21%; width: 30%; height: 23%;
+  border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0) 72%);
+}
+.step-title { font-family: var(--display); font-size: 20px; font-weight: 600; color: var(--stone-text); line-height: 1.2; margin-bottom: 6px; }
+.step-desc { font-size: 14px; color: rgba(255,255,255,0.72); line-height: 1.55; max-width: 46ch; }
+
+.prose { max-width: 820px; }
+.prose p { font-size: 16px; color: var(--stone-text-dim); line-height: 1.5; margin-bottom: 18px; }
+.prose p:last-child { margin-bottom: 0; }
+.prose p:first-child { font-family: var(--display); font-size: clamp(22px,2.8vw,32px); color: var(--stone-text); line-height: 1.25; margin-bottom: 22px; }
+
+.buy-grid { display: grid; grid-template-columns: 1fr; gap: 32px; }
+.variant-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 20px; }
+.variant-btn {
+  background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 4px; padding: 14px 16px; cursor: pointer; text-align: left; transition: all 0.2s; color: var(--stone-text);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 2px 6px rgba(0,0,0,0.3);
+}
+.variant-btn:hover { border-color: rgba(255,255,255,0.12); background: rgba(0,0,0,0.35); }
+.variant-btn.selected {
+  border-color: rgba(140,180,220,0.35); background: rgba(0,0,0,0.35);
+  box-shadow: inset 0 1px 0 rgba(140,180,220,0.1), 0 2px 6px rgba(0,0,0,0.3), 0 0 16px rgba(140,180,220,0.06);
+}
+.variant-label { font-family: var(--display); font-size: 16px; font-weight: 500; }
+.variant-sub { font-size: 12px; color: var(--stone-text-dim); margin-top: 3px; }
+.variant-price { font-size: 14px; color: var(--gold); float: right; font-weight: 600; }
+.add-btn {
+  width: 100%; padding: 16px; border: 1px solid rgba(140,180,220,0.4);
+  background: linear-gradient(180deg, rgba(140,180,220,0.2) 0%, rgba(120,160,200,0.08) 100%);
+  color: var(--gold); border-radius: 4px; font-family: var(--body);
+  font-size: 14px; font-weight: 700; cursor: pointer; letter-spacing: 0.1em; text-transform: uppercase; transition: all 0.2s;
+  box-shadow: inset 0 1px 0 rgba(180,210,240,0.15), 0 3px 8px rgba(0,0,0,0.4), 0 0 20px rgba(140,180,220,0.08);
+}
+.add-btn:hover {
+  background: linear-gradient(180deg, rgba(140,180,220,0.3) 0%, rgba(120,160,200,0.12) 100%);
+  border-color: rgba(140,180,220,0.6);
+  box-shadow: inset 0 1px 0 rgba(180,210,240,0.2), 0 3px 8px rgba(0,0,0,0.4), 0 0 28px rgba(140,180,220,0.12);
+}
+.add-btn:active {
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.3), 0 0 20px rgba(140,180,220,0.08);
+  transform: translateY(1px);
+}
+.stock-note { font-size: 10px; color: var(--stone-text-dim); margin-top: 10px; text-align: center; letter-spacing: 1px; text-transform: uppercase; }
+.details-list { list-style: none; margin-top: 16px; }
+.details-list li { font-size: 12px; color: var(--stone-text-dim); padding: 8px 0; border-bottom: 1px solid var(--stone-border); display: flex; gap: 10px; }
+.details-list li span { color: var(--gold); font-size: 10px; opacity: 0.6; min-width: 18px; }
+.buy-price { font-family: var(--display); font-size: 26px; font-weight: 500; color: var(--stone-text-bright); margin-bottom: 20px; }
+.section-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #fff; font-weight: 800; font-family: var(--body); margin-bottom: 20px; }
+
+.qty-row { display: flex; gap: 10px; align-items: stretch; margin-bottom: 16px; }
+.qty-stepper {
+  display: flex; align-items: center; border: 1px solid rgba(255,255,255,0.06); border-radius: 4px;
+  background: rgba(0,0,0,0.25);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 2px 4px rgba(0,0,0,0.3);
+}
+.qty-stepper button {
+  width: 36px; height: 40px; background: none; border: none;
+  color: var(--stone-text-dim); font-size: 16px; cursor: pointer; transition: all 0.15s;
+}
+.qty-stepper button:hover { color: var(--gold); }
+.qty-stepper > span { font-size: 14px; font-weight: 600; min-width: 28px; text-align: center; color: var(--stone-text); }
+
+.pdp-wrap { display: grid; grid-template-columns: 1fr; gap: 32px; }
+.pdp-main {
+  aspect-ratio: 3/4; max-height: 480px; border-radius: 2px;
+  background: transparent;
+}
+.pdp-thumbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.pdp-thumb {
+  aspect-ratio: 1; border-radius: 3px; cursor: pointer; border: 2px solid rgba(255,255,255,0.06);
+  transition: all 0.2s; display: flex; align-items: center; justify-content: center;
+  font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--stone-text-dim);
+  background: rgba(0,0,0,0.25);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 4px rgba(0,0,0,0.3);
+}
+.pdp-thumb:hover { border-color: rgba(255,255,255,0.12); }
+.pdp-thumb.active {
+  border-color: rgba(140,180,220,0.4);
+  box-shadow: inset 0 1px 0 rgba(140,180,220,0.08), 0 2px 4px rgba(0,0,0,0.3), 0 0 10px rgba(140,180,220,0.06);
+}
+.pdp-name { font-family: var(--display); font-weight: 500; font-size: 32px; color: var(--stone-text-bright); margin-bottom: 6px; }
+.pdp-tagline { font-family: var(--display); font-style: italic; font-size: 16px; color: var(--stone-text-dim); margin-bottom: 16px; }
+.breadcrumb { font-size: 12px; color: var(--stone-text-dim); margin-bottom: 16px; }
+.breadcrumb button { background: none; border: none; cursor: pointer; color: var(--accent-bright); font-size: 12px; font-family: var(--body); }
+
+.accordion { border-top: 1px solid var(--stone-border); margin-top: 24px; }
+.accordion-item { border-bottom: 1px solid var(--stone-border); }
+.accordion-header { width: 100%; background: none; border: none; cursor: pointer; padding: 14px 0; display: flex; justify-content: space-between; align-items: center; font-family: var(--display); font-size: 14px; font-weight: 500; color: var(--stone-text); }
+.accordion-header:hover { color: var(--gold); }
+.accordion-chevron { font-size: 12px; color: var(--stone-text-dim); transition: transform 0.2s; }
+.accordion-chevron.open { transform: rotate(180deg); }
+.accordion-body { padding: 0 0 14px; font-size: 14px; color: var(--stone-text-dim); line-height: 1.65; }
+
+.about-img { background: rgba(14,16,22,0.5); border: 1px solid var(--stone-border); aspect-ratio: 16/9; margin-bottom: 28px; display: flex; align-items: center; justify-content: center; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--stone-text-dim); }
+.about-epigraph { font-size: 20px; margin-bottom: 28px; }
+.about-title { font-family: var(--display); font-weight: 600; font-size: clamp(34px,5.5vw,58px); color: var(--stone-text-bright); line-height: 1.05; margin-bottom: 20px; text-transform: capitalize; }
+.about-text { font-size: clamp(14px,1.5vw,16px); color: #fff; line-height: 1.6; margin-bottom: 16px; max-width: 64ch; }
+.manifesto { list-style: none; margin-top: 32px; }
+.manifesto li { font-family: var(--display); font-size: 20px; font-weight: 500; color: var(--stone-text); line-height: 1.3; padding: 15px 0; border-bottom: 1px solid var(--stone-border); }
+.closing-mantra { text-align: center; padding: 40px 0 20px; }
+.closing-mantra .cf { font-size: 16px; }
+.closing-mantra em { display: block; margin-top: 12px; font-family: var(--display); font-size: 16px; color: var(--stone-text-dim); }
+
+.cart-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.5); opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+.cart-overlay.open { opacity: 1; pointer-events: auto; }
+.cart-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(380px,90vw); z-index: 201; background: rgba(16,18,24,0.95); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-left: 1px solid var(--stone-border); transform: translateX(100%); transition: transform 0.3s ease; display: flex; flex-direction: column; }
+.cart-drawer.open { transform: translateX(0); }
+.cart-header { display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 1px solid var(--stone-border); }
+.cart-header h2 { font-family: var(--display); font-weight: 500; font-size: 20px; color: var(--stone-text-bright); }
+.cart-close { background: none; border: none; cursor: pointer; font-size: 20px; color: var(--stone-text-dim); padding: 4px; }
+.cart-items { flex: 1; overflow-y: auto; padding: 16px 20px; }
+.cart-empty { text-align: center; padding: 48px 20px; font-family: var(--display); font-style: italic; font-size: 16px; color: var(--stone-text-dim); }
+.cart-item { display: flex; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--stone-border); }
+.cart-item-thumb { width: 48px; height: 48px; flex-shrink: 0; border-radius: 4px; background: rgba(14,16,22,0.5); display: flex; align-items: center; justify-content: center; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--stone-text-dim); }
+.cart-item-name { font-family: var(--display); font-size: 14px; font-weight: 500; color: var(--stone-text); }
+.cart-item-variant { font-size: 12px; color: var(--stone-text-dim); margin-top: 2px; }
+.cart-item-qty { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.cart-item-qty button { width: 24px; height: 24px; border: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.25); border-radius: 3px; cursor: pointer; font-size: 14px; color: var(--stone-text-dim); box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 1px 3px rgba(0,0,0,0.3); transition: all 0.15s; }
+.cart-item-qty button:hover { color: var(--gold); border-color: rgba(140,180,220,0.2); }
+.cart-item-qty span { font-size: 14px; font-weight: 600; color: var(--stone-text); }
+.cart-item-price { font-size: 14px; font-weight: 600; color: var(--gold); align-self: flex-start; }
+.cart-footer { padding: 20px; border-top: 1px solid var(--stone-border); }
+.cart-subtotal { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 14px; }
+.cart-subtotal span:last-child { font-weight: 600; color: var(--gold); }
+.checkout-btn {
+  width: 100%; padding: 16px; border: 1px solid rgba(140,180,220,0.4);
+  background: linear-gradient(180deg, rgba(140,180,220,0.2), rgba(120,160,200,0.08));
+  color: var(--gold); border-radius: 4px; font-family: var(--body);
+  font-size: 12px; font-weight: 700; cursor: pointer; letter-spacing: 0.1em; text-transform: uppercase; transition: all 0.2s;
+  box-shadow: inset 0 1px 0 rgba(180,210,240,0.15), 0 3px 8px rgba(0,0,0,0.4), 0 0 20px rgba(140,180,220,0.08);
+}
+.checkout-btn:hover {
+  background: linear-gradient(180deg, rgba(140,180,220,0.3), rgba(120,160,200,0.12));
+  border-color: rgba(140,180,220,0.6);
+}
+.cart-mantra { font-family: var(--display); font-style: italic; font-size: 12px; color: var(--stone-text-dim); text-align: center; margin-top: 14px; }
+
+@media (min-width: 760px) {
+  .hero { grid-template-columns: 1fr 1.2fr; gap: 48px; padding: 56px 48px; align-items: stretch; }
+  .hero-visual { aspect-ratio: auto; height: 100%; min-height: 300px; }
+  .section { padding: 56px 48px; }
+  .buy-grid { grid-template-columns: 1fr 1fr; gap: 48px; }
+  .pdp-wrap { grid-template-columns: 1.2fr 1fr; gap: 48px; }
+  .pdp-wrap > .recess-panel { position: sticky; top: 80px; }
+  .nav { max-width: 960px; margin: 0 auto; padding: 0 48px; }
+  .nav-wordmark { display: block; }
+  .nav-logo { height: 38px; }
+  .bag-btn { width: 54px; height: 54px; }
+  .bag-icon { width: 50px; height: 50px; }
+}
+
+/* ── store.html: single-SKU conversion layout (additive) ── */
+/* mobile-only centered red "baba-gah" wordmark (masked SVG → red fill + faux extrusion) */
+.nav-mark { display: none; }
+@media (max-width: 759px) {
+  .nav-mark {
+    display: block; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 128px; height: auto; cursor: pointer;
+    filter: drop-shadow(1px 1px 0 #8c0f1c) drop-shadow(2px 2px 0 #6b0b16) drop-shadow(0 3px 2px rgba(0,0,0,0.45));
+  }
+}
+.eyebrow { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #fff; opacity: 1; font-weight: 800; margin-bottom: 14px; font-family: var(--body); }
+/* embedded gemstone "stud" — CSS port of the frames builder spheroid shading
+   (hemisphere diffuse from an upper-left light + Blinn specular hot-spot +
+   fresnel rim + contact shadow seating it into the surface) */
+.stud {
+  display: inline-block; width: 12px; height: 12px; border-radius: 50%;
+  vertical-align: -1px; margin-right: 5px; position: relative; flex-shrink: 0;
+}
+.stud::after {                 /* specular hot-spot, offset toward the light */
+  content: ''; position: absolute; top: 16%; left: 22%; width: 32%; height: 26%;
+  border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 72%);
+}
+.stud-green {                  /* emerald, brightened — diffuse body + fresnel rim */
+  background: radial-gradient(circle at 35% 30%,
+    #ecfff2 0%, #8dffae 12%, #34e85f 36%, #14b03f 64%, #0a6b27 100%);
+  box-shadow:
+    inset -1px -1.5px 2.5px rgba(0,45,12,0.6),         /* unlit lower-right */
+    inset 1px 1px 1.5px rgba(214,255,224,0.5),         /* lit upper-left lift */
+    inset 0 0 0 0.5px rgba(150,255,180,0.35),          /* fresnel silhouette rim */
+    0 0 6px rgba(60,255,120,0.6),                       /* glow */
+    1px 1.5px 2px rgba(0,0,0,0.55);                     /* contact shadow / seat */
+  animation: studPulse 1.6s ease-in-out infinite;
+}
+@keyframes studPulse { 0%,100% { box-shadow:
+    inset -1px -1.5px 2.5px rgba(0,45,12,0.6), inset 1px 1px 1.5px rgba(214,255,224,0.5),
+    inset 0 0 0 0.5px rgba(150,255,180,0.35), 0 0 5px rgba(60,255,120,0.5), 1px 1.5px 2px rgba(0,0,0,0.55); }
+  50% { box-shadow:
+    inset -1px -1.5px 2.5px rgba(0,45,12,0.6), inset 1px 1px 1.5px rgba(214,255,224,0.5),
+    inset 0 0 0 0.5px rgba(150,255,180,0.35), 0 0 9px rgba(80,255,140,0.85), 1px 1.5px 2px rgba(0,0,0,0.55); } }
+.hero-lede { font-family: var(--display); font-size: clamp(18px,2.2vw,22px); font-style: italic; color: var(--stone-text-dim); line-height: 1.4; margin-bottom: 24px; max-width: 420px; }
+.price-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+.price-row .buy-price { margin-bottom: 0; }
+.size-fact { font-size: 14px; color: var(--stone-text-dim); opacity: 0.7; letter-spacing: 0.02em; }
+.hero-buy { display: flex; flex-direction: column; }
+
+.benefits { display: grid; grid-template-columns: 1fr; gap: 1px; background: var(--stone-border); border: 1px solid var(--stone-border); border-radius: 4px; overflow: visible; }
+.benefit { background: rgba(14,16,20,0.55); padding: 22px 20px; position: relative; }
+.benefit-icon { position: absolute; top: -38px; right: 4px; width: 92px; height: 92px; object-fit: contain; filter: drop-shadow(0 4px 7px rgba(0,0,0,0.5)); z-index: 2; }
+.benefit-title { font-family: var(--display); font-size: 17px; color: var(--stone-text); margin-bottom: 6px; }
+.benefit-sub { font-size: 12.5px; color: var(--stone-text-dim); opacity: 0.72; line-height: 1.5; }
+
+
+.closing-cta { text-align: center; padding: 8px 0 4px; }
+.closing-cta .buy-price { margin-bottom: 6px; }
+.closing-cta .size-fact { display: block; margin-bottom: 18px; }
+.closing-cta .add-btn { max-width: 360px; margin: 0 auto; }
+
+.buy-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 150;
+  padding: 12px 0; background: rgba(12,14,18,0.92); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  border-top: 1px solid var(--stone-border-light); box-shadow: 0 -6px 24px rgba(0,0,0,0.45);
+  transform: translateY(130%); opacity: 0; transition: transform 0.32s ease, opacity 0.32s ease; pointer-events: none; }
+.buy-bar.show { transform: translateY(0); opacity: 1; pointer-events: auto; }
+.buy-bar-inner { display: flex; align-items: center; gap: 12px; padding: 0 20px; }
+.buy-bar-name { font-family: var(--display); font-size: 15px; color: var(--stone-text); white-space: nowrap; }
+.buy-bar-price { font-family: var(--display); font-size: 17px; color: var(--gold); }
+.buy-bar-sp { flex: 1; }
+.buy-bar-add { width: auto; flex: 0 0 auto; padding: 11px 26px; }
+
+.editable { position: relative; }
+
+@media (min-width: 760px) {
+  .benefits { grid-template-columns: repeat(3, 1fr); }
+  .buy-bar { padding: 13px 0; }
+  .buy-bar-inner { max-width: 960px; margin: 0 auto; padding: 0 48px; }
+}
+
+/* ── vibrant early-web "add to bag" button (overrides the muted default) ── */
+.add-btn {
+  width: 100%; padding: 15px 18px;
+  border: 3px outset #ff6b78;
+  border-radius: 0 !important;
+  background: linear-gradient(180deg, #ff4858 0%, #f82538 46%, #b3101f 100%);
+  color: #fff;
+  font-family: 'Arial Black', Impact, var(--body);
+  font-size: 16px; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase;
+  text-shadow: 1px 1px 0 rgba(80,0,6,0.7), 0 0 8px rgba(255,80,100,0.35);
+  cursor: pointer;
+  box-shadow: 0 0 0 2px #3a0006, 4px 4px 0 #3a0006, inset 0 2px 0 rgba(255,255,255,0.5);
+  image-rendering: pixelated; transition: filter 0.08s;
+  animation: addPulse 1.1s ease-in-out infinite;
+}
+@keyframes addPulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.12) saturate(1.15); } }
+.add-btn:hover {
+  background: linear-gradient(180deg, #ff6470 0%, #ff3346 46%, #cc1424 100%);
+  filter: brightness(1.06);
+}
+.add-btn:active {
+  border-style: inset; transform: translate(3px, 3px);
+  box-shadow: 0 0 0 2px #3a0006, inset 0 2px 4px rgba(80,0,6,0.5);
+  animation: none;
+}
+/* keep the sticky-bar button compact (re-assert after the .add-btn override) */
+.buy-bar-add { width: auto; flex: 0 0 auto; padding: 11px 24px; font-size: 13px; animation: none; }
+</style>
+</head>
+<body>
+<canvas id="skyCanvas"></canvas>
+<canvas id="rockCanvas"></canvas>
+<div id="model-layer"></div>
+<div id="app-root"></div>
+
+<script src="./vendor/react.production.min.js"></script>
+<script src="./vendor/react-dom.production.min.js"></script>
+
+<!-- ── 3D models: squeeze bottle + chalk idol (Baba.obj) ── -->
+<script src="bottle-obj.js"></script>
+<script src="bottle-config.js"></script>
+<script src="baba-mesh.js"></script>
+<script src="baba-wordmark.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { DecalGeometry } from 'three/addons/geometries/DecalGeometry.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
+import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
+
+/* ===== chalk-material.js ===== */
+// ──────────────────────────────────────────────────────────────────────────
+// chalk-material.js procedural chalk / plaster PBR material.
+// Ported from chalk-material-settings.md (exported from the Texture Viewer).
+// A MeshStandardMaterial with the chalk shader injected via onBeforeCompile,
+// so it keeps full scene + environment lighting.
+// ──────────────────────────────────────────────────────────────────────────
+
+const CHALK_COMMON = `
+#include <common>
+varying vec3 vChalkPos;
+uniform float uPosScale, uLargeScale, uGrainScale, uGritScale;
+uniform float uPitScale, uPitThresh, uPitDepth, uBumpStrength;
+uniform float uDust, uCrackScale, uCrackAmount, uEps;
+float gHeight; float gPit; float gDust; float gCrack; float gTone;
+
+float chash31(vec3 p){
+  p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
+  p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+float cnoise3(vec3 x){
+  vec3 i = floor(x); vec3 f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  float n000 = chash31(i + vec3(0.,0.,0.));
+  float n100 = chash31(i + vec3(1.,0.,0.));
+  float n010 = chash31(i + vec3(0.,1.,0.));
+  float n110 = chash31(i + vec3(1.,1.,0.));
+  float n001 = chash31(i + vec3(0.,0.,1.));
+  float n101 = chash31(i + vec3(1.,0.,1.));
+  float n011 = chash31(i + vec3(0.,1.,1.));
+  float n111 = chash31(i + vec3(1.,1.,1.));
+  float nx00 = mix(n000, n100, f.x);
+  float nx10 = mix(n010, n110, f.x);
+  float nx01 = mix(n001, n101, f.x);
+  float nx11 = mix(n011, n111, f.x);
+  return mix(mix(nx00, nx10, f.y), mix(nx01, nx11, f.y), f.z);
+}
+float cfbm(vec3 p, int oct){
+  float a = 0.5, s = 0.0, n = 0.0;
+  for(int i = 0; i < 6; i++){
+    if(i >= oct) break;
+    s += a * cnoise3(p); n += a; p *= 2.02; a *= 0.5;
+  }
+  return s / n;
+}
+float chalkHeight(vec3 p, out float pit, out float dust, out float crack, out float tone){
+  float large = cfbm(p * uLargeScale, 5) - 0.5;
+  float grain = cfbm(p * uGrainScale, 6) - 0.5;
+  float fwp = fwidth(p.x) + fwidth(p.y) + fwidth(p.z);
+  float gritFade  = 1.0 - smoothstep(0.6, 1.5, fwp * uGritScale);
+  float microFade = 1.0 - smoothstep(0.6, 1.5, fwp * uGritScale * 2.7);
+  float grit  = (cnoise3(p * uGritScale) - 0.5) * gritFade;
+  float micro = (cnoise3(p * uGritScale * 2.7) - 0.5) * microFade;
+  float h = large * 0.30 + grain * 0.42 + grit * 0.16 + micro * 0.10;
+  tone = large * 0.5 + grain * 0.5;
+  float pn = cfbm(p * uPitScale + 13.0, 4);
+  pit = smoothstep(uPitThresh, uPitThresh + 0.12, pn);
+  h -= pit * uPitDepth;
+  dust = smoothstep(0.60, 0.92, cfbm(p * uGrainScale * 0.45 + 31.0, 4));
+  float c = cfbm(p * uCrackScale + 5.0, 4);
+  crack = smoothstep(0.03, 0.0, abs(c - 0.5)) * uCrackAmount;
+  h -= crack * 0.20;
+  return h;
+}
+`;
+
+const CHALK_MAP = `
+#include <map_fragment>
+{
+  vec3 cp = vChalkPos * uPosScale;
+  gHeight = chalkHeight(cp, gPit, gDust, gCrack, gTone);
+  vec3 base = diffuseColor.rgb;
+  float lum = dot(base, vec3(0.299, 0.587, 0.114));
+  base *= (1.0 + gTone * 0.16);
+  base = mix(base, mix(base, vec3(lum), 0.35) * 0.82, gPit * 0.6);
+  vec3 dustCol = mix(base, vec3(lum), 0.4) * 1.06;
+  base = mix(base, dustCol, gDust * uDust * 0.5);
+  base *= (1.0 - 0.4 * gCrack);
+  diffuseColor.rgb = clamp(base, 0.0, 1.0);
+}
+`;
+
+const CHALK_ROUGH = `
+#include <roughnessmap_fragment>
+roughnessFactor = clamp(roughnessFactor * (0.96 + 0.06 * gHeight) + gPit * 0.03, 0.0, 1.0);
+`;
+
+const CHALK_NORMAL = `
+#include <normal_fragment_maps>
+{
+  vec3 vpos = -vViewPosition;
+  vec3 dpdx = dFdx(vpos);
+  vec3 dpdy = dFdy(vpos);
+  float dhdx = dFdx(gHeight);
+  float dhdy = dFdy(gHeight);
+  vec3 r1 = cross(dpdy, normal);
+  vec3 r2 = cross(normal, dpdx);
+  float det = dot(dpdx, r1);
+  vec3 grad = sign(det) * (dhdx * r1 + dhdy * r2);
+  normal = normalize(abs(det) * normal - uBumpStrength * 0.9 * grad);
+}
+`;
+
+const DEFAULTS = {
+  uPosScale: 2, uLargeScale: 0.6, uGrainScale: 10, uGritScale: 14,
+  uPitScale: 1.6, uPitThresh: 0.66, uPitDepth: 0.28, uBumpStrength: 0.05,
+  uDust: 0.23, uCrackScale: 3, uCrackAmount: 0, uEps: 0.012,
+};
+
+function createChalkMaterial(cfg = {}) {
+  const c = cfg.chalk || cfg;             // accept the whole settings object or just the chalk block
+  const u = c.uniforms || {};
+  const uniforms = {};
+  for (const k in DEFAULTS) uniforms[k] = { value: u[k] !== undefined ? u[k] : DEFAULTS[k] };
+
+  const mat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(c.color || 0xf0eee8),
+    metalness: c.metalness ?? 0,
+    roughness: c.roughness ?? 0.97,
+  });
+  mat.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, uniforms);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vChalkPos;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvChalkPos = transformed;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', CHALK_COMMON)
+      .replace('#include <map_fragment>', CHALK_MAP)
+      .replace('#include <roughnessmap_fragment>', CHALK_ROUGH)
+      .replace('#include <normal_fragment_maps>', CHALK_NORMAL);
+  };
+  mat.customProgramCacheKey = () => 'chalk-material';
+  mat.userData.chalkUniforms = uniforms;
+  return mat;
+}
+
+/* ===== bottle-viewer.js ===== */
+// ──────────────────────────────────────────────────────────────────────────
+// bottle-viewer.js reusable renderer for SqueezeBottle.obj + a label decal.
+// Consumes the config produced by bottle-editor.html (window.BOTTLE_CONFIG) and
+// the bundled mesh (window.BOTTLE_OBJ). Used by both a standalone product page
+// and baba-gah.html.
+//
+//   import { createBottleViewer } from './bottle-viewer.js';
+//   createBottleViewer(canvasEl, { config, objText, interactive, autoRotate, transparentBg });
+// ──────────────────────────────────────────────────────────────────────────
+
+
+
+
+
+function createBottleViewer(canvas, opts = {}) {
+  const objText = opts.objText || window.BOTTLE_OBJ;
+  let cfg = opts.config || window.BOTTLE_CONFIG || {};
+  const interactive = opts.interactive !== false;
+  const transparentBg = !!opts.transparentBg;
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = cfg.scene?.exposure ?? 1.0;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  const scene = new THREE.Scene();
+  if (!transparentBg && cfg.scene?.background) scene.background = new THREE.Color(cfg.scene.background);
+
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+  const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.enablePan = false;
+  controls.enabled = interactive;
+  controls.autoRotate = false;
+  const spinning = !!opts.autoRotate;   // spin the bottle itself, on a tilted axis (not the camera)
+
+  const key = new THREE.DirectionalLight(0xfff2dd, cfg.scene?.keyLight ?? 1.2);
+  key.position.set(4, 6, 5); scene.add(key);
+  const rim = new THREE.DirectionalLight(0xbfd4ff, 0.5); rim.position.set(-5, 3, -4); scene.add(rim);
+
+  // ── Materials ──
+  function makeMat(st) {
+    return new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color(st.color),
+      roughness: st.rough / 100, metalness: st.metal / 100,
+      clearcoat: st.coat / 100, clearcoatRoughness: st.coatR / 100,
+      transmission: st.trans / 100, sheen: st.sheen / 100, sheenColor: new THREE.Color(0xffffff),
+      envMapIntensity: st.env / 100, ior: 1.45, thickness: 0.6,
+      transparent: st.trans > 0 || st.opac < 100, opacity: st.opac / 100,
+      side: THREE.DoubleSide,
+    });
+  }
+
+  // ── Model ──
+  const obj = new OBJLoader().parse(objText);
+  const box = new THREE.Box3().setFromObject(obj);
+  const center = box.getCenter(new THREE.Vector3());
+  obj.position.sub(center);
+  obj.rotation.y = Math.PI;
+  obj.updateMatrixWorld(true);
+
+  let bodyMesh = null, lidMesh = null;
+  obj.traverse(c => {
+    if (!c.isMesh) return;
+    if (!c.geometry.attributes.normal) c.geometry.computeVertexNormals();
+    if (c.name === 'Lid' || /lid/i.test(c.name)) lidMesh = c; else bodyMesh = c;
+  });
+  const mats = cfg.materials || {};
+  if (bodyMesh && mats.Body) bodyMesh.material = makeMat(mats.Body);
+  if (lidMesh && mats.Lid) lidMesh.material = makeMat(mats.Lid);
+  const tiltGroup = new THREE.Group();   // constant lean of the spin axis
+  const spinGroup = new THREE.Group();   // rotates the bottle about that tilted axis
+  tiltGroup.add(spinGroup);
+  spinGroup.add(obj);
+  scene.add(tiltGroup);
+  if (spinning) tiltGroup.rotation.z = THREE.MathUtils.degToRad(20);
+  let decalLocalDir = null;
+
+  const bodyBox = new THREE.Box3().setFromObject(bodyMesh || obj);
+
+  // Camera framing
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const dist = maxDim / (2 * Math.tan(camera.fov * Math.PI / 360)) * 1.3;
+  camera.position.set(dist * 0.45, size.y * 0.12, dist);
+  controls.target.set(0, 0, 0);
+  controls.update();
+
+  // ── Label decal (normal-clipped to the front) ──
+  const raycaster = new THREE.Raycaster();
+  raycaster.far = 30;
+  const labelDirU = { value: new THREE.Vector3(1, 0, 0) };
+  const decalMat = new THREE.MeshPhysicalMaterial({
+    transparent: true, depthTest: true, depthWrite: false,
+    polygonOffset: true, polygonOffsetFactor: -6,
+    roughness: 0.45, metalness: 0, clearcoat: 0.3, side: THREE.FrontSide,
+  });
+  decalMat.onBeforeCompile = (shader) => {
+    shader.uniforms.uLabelDir = labelDirU;
+    shader.vertexShader = 'varying vec3 vLabelN;\n' + shader.vertexShader.replace(
+      '#include <beginnormal_vertex>',
+      '#include <beginnormal_vertex>\n  vLabelN = normalize(mat3(modelMatrix) * objectNormal);'
+    );
+    shader.fragmentShader = 'uniform vec3 uLabelDir;\nvarying vec3 vLabelN;\n' + shader.fragmentShader.replace(
+      '#include <clipping_planes_fragment>',
+      '#include <clipping_planes_fragment>\n  if (dot(normalize(vLabelN), normalize(uLabelDir)) < 0.25) discard;'
+    );
+  };
+  decalMat.customProgramCacheKey = () => 'label-normal-clip';
+
+  let labelTexture = null, labelAspect = 612 / 174, decalMesh = null;
+  let label = cfg.label || {};
+
+  function rasterizeSVG(svgText, done) {
+    const vb = svgText.match(/viewBox\s*=\s*["']([\d.\-\s]+)["']/i);
+    let aspect = 612 / 174, vbW = 612, vbH = 174;
+    if (vb) { const p = vb[1].trim().split(/[\s,]+/).map(Number); vbW = p[2]; vbH = p[3]; aspect = vbW / vbH; }
+    const cw = 1024, ch = Math.max(1, Math.round(1024 / aspect));
+    let svg = svgText
+      .replace(/(<svg[^>]*?)\swidth\s*=\s*["'][^"']*["']/i, '$1')
+      .replace(/(<svg[^>]*?)\sheight\s*=\s*["'][^"']*["']/i, '$1')
+      .replace(/<svg/i, `<svg width="${cw}" height="${ch}"`);
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+    const img = new Image();
+    img.onload = () => {
+      const cnv = document.createElement('canvas'); cnv.width = cw; cnv.height = ch;
+      cnv.getContext('2d').drawImage(img, 0, 0, cw, ch);
+      URL.revokeObjectURL(url);
+      const tex = new THREE.CanvasTexture(cnv);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      done(tex, aspect);
+    };
+    img.onerror = () => URL.revokeObjectURL(url);
+    img.src = url;
+  }
+
+  function placeDecal() {
+    if (decalMesh) { decalMesh.removeFromParent(); decalMesh.geometry.dispose(); decalMesh = null; }
+    if (!labelTexture || !bodyMesh || label.visible === false) return;
+    bodyMesh.updateMatrixWorld(true);
+    bodyBox.setFromObject(bodyMesh);
+
+    const a = (label.angle || 0) * Math.PI / 180;
+    const dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+    labelDirU.value.copy(dir);
+    const y = THREE.MathUtils.lerp(bodyBox.min.y + 0.02, bodyBox.max.y - 0.02, (label.y ?? 46) / 100);
+    const cx = (bodyBox.min.x + bodyBox.max.x) / 2, cz = (bodyBox.min.z + bodyBox.max.z) / 2;
+    const origin = new THREE.Vector3(cx + dir.x * 10, y, cz + dir.z * 10);
+
+    raycaster.set(origin, dir.clone().negate());
+    const hits = raycaster.intersectObject(bodyMesh, true);
+    if (!hits.length) return;
+    const hit = hits[0];
+    const n = (hit.face ? hit.face.normal.clone() : dir.clone()).transformDirection(bodyMesh.matrixWorld).normalize();
+
+    const dummy = new THREE.Object3D();
+    dummy.position.copy(hit.point);
+    dummy.lookAt(hit.point.clone().add(n));
+    dummy.rotateZ((label.rot || 0) * Math.PI / 180);
+
+    const w = (label.size ?? 70) / 100;
+    const h = w / labelAspect;
+    const surfR = (hit.point.x - cx) * dir.x + (hit.point.z - cz) * dir.z;
+    const depth = Math.min(surfR * 1.7, Math.max(0.25, w * 0.7));
+    const geo = new DecalGeometry(bodyMesh, hit.point, dummy.rotation, new THREE.Vector3(w, h, depth));
+    decalMat.opacity = (label.opacity ?? 100) / 100;
+    decalMat.roughness = (label.finish ?? 45) / 100;
+    decalMesh = new THREE.Mesh(geo, decalMat);
+    decalMesh.renderOrder = 2;
+    // Lock the decal to the bottle so it spins with it (bake the parent's inverse).
+    spinGroup.updateWorldMatrix(true, false);
+    decalMesh.applyMatrix4(spinGroup.matrixWorld.clone().invert());
+    spinGroup.add(decalMesh);
+    const dq = new THREE.Quaternion(); spinGroup.getWorldQuaternion(dq);
+    decalLocalDir = dir.clone().applyQuaternion(dq.clone().invert()).normalize();
+  }
+
+  function applyLabelTexture(svgText) {
+    if (!svgText) { placeDecal(); return; }
+    rasterizeSVG(svgText, (tex, aspect) => {
+      if (labelTexture) labelTexture.dispose();
+      labelTexture = tex; labelAspect = aspect;
+      decalMat.map = labelTexture; decalMat.needsUpdate = true;
+      placeDecal();
+    });
+  }
+  applyLabelTexture(label.svg);
+
+  // ── Resize + loop ──
+  let raf = 0, disposed = false;
+  const spinClock = new THREE.Clock();
+  const _q = new THREE.Quaternion();
+  function resize() {
+    const w = canvas.clientWidth || canvas.parentElement?.clientWidth || 1;
+    const h = canvas.clientHeight || canvas.parentElement?.clientHeight || 1;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+  const ro = new ResizeObserver(resize);
+  ro.observe(canvas);
+  if (canvas.parentElement) ro.observe(canvas.parentElement);
+  resize();
+
+  function animate() {
+    if (disposed) return;
+    const dt = spinClock.getDelta();
+    if (spinning) {
+      spinGroup.rotation.y += 0.8 * dt;            // tilted-axis spin
+      if (decalLocalDir) {                          // keep the label's front-clip aligned as it turns
+        spinGroup.getWorldQuaternion(_q);
+        labelDirU.value.copy(decalLocalDir).applyQuaternion(_q);
+      }
+    }
+    controls.update();
+    renderer.render(scene, camera);
+    raf = requestAnimationFrame(animate);
+  }
+  animate();
+
+  return {
+    setConfig(next) {
+      cfg = next || cfg;
+      if (next?.materials?.Body && bodyMesh) bodyMesh.material = makeMat(next.materials.Body);
+      if (next?.materials?.Lid && lidMesh) lidMesh.material = makeMat(next.materials.Lid);
+      if (next?.scene) {
+        renderer.toneMappingExposure = next.scene.exposure ?? 1.0;
+        key.intensity = next.scene.keyLight ?? 1.2;
+        if (!transparentBg && next.scene.background) scene.background = new THREE.Color(next.scene.background);
+      }
+      label = next?.label || label;
+      applyLabelTexture(label.svg);
+    },
+    dispose() {
+      disposed = true;
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      controls.dispose();
+      renderer.dispose();
+    },
+  };
+}
+
+/* ===== chalk-viewer.js ===== */
+// ──────────────────────────────────────────────────────────────────────────
+// chalk-viewer.js renders Baba.obj (the raised-hands idol, bundled as
+// window.BABA_MESH) with the procedural chalk material. Used for the home hero.
+//
+//   import { createChalkViewer } from './chalk-viewer.js';
+//   createChalkViewer(canvasEl, { config, autoRotate, interactive, transparentBg });
+// ──────────────────────────────────────────────────────────────────────────
+
+
+
+
+function b64ToBuffer(b64) {
+  const bin = atob(b64), len = bin.length, u = new Uint8Array(len);
+  for (let i = 0; i < len; i++) u[i] = bin.charCodeAt(i);
+  return u.buffer;
+}
+
+function buildIdolGeometry(mesh) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(b64ToBuffer(mesh.positions)), 3));
+  g.setIndex(new THREE.BufferAttribute(new Uint32Array(b64ToBuffer(mesh.index)), 1));
+  g.computeVertexNormals();   // indexed → smooth shading
+  g.computeBoundingBox();
+  return g;
+}
+
+function createChalkViewer(canvas, opts = {}) {
+  const meshData = opts.mesh || window.BABA_MESH;
+  const cfg = opts.config || window.CHALK_CONFIG || {};
+  const transparentBg = !!opts.transparentBg;
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  const scene = new THREE.Scene();
+  if (!transparentBg && cfg.scene?.background) scene.background = new THREE.Color(cfg.scene.background);
+
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+  const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.enablePan = false;
+  controls.enabled = !!opts.interactive;        // hero is display-only by default
+  controls.autoRotate = opts.autoRotate !== false;
+  controls.autoRotateSpeed = 1.2;
+
+  const key = new THREE.DirectionalLight(0xfff4e6, 1.1); key.position.set(4, 6, 5); scene.add(key);
+  const rim = new THREE.DirectionalLight(0xcfe0ff, 0.45); rim.position.set(-5, 3, -4); scene.add(rim);
+
+  // Idol mesh
+  const geo = buildIdolGeometry(meshData);
+  const bb = geo.boundingBox;
+  const center = bb.getCenter(new THREE.Vector3());
+  geo.translate(-center.x, -center.y, -center.z);   // centre at origin
+  geo.computeBoundingBox();
+
+  const material = createChalkMaterial(cfg);
+  const idol = new THREE.Mesh(geo, material);
+  scene.add(idol);
+
+  // ── Orbiting 3D wordmark ring (babagah.svg extruded, bent into a circle) ──
+  let wordRing = null;
+  try {
+    if (window.BABA_WORDMARK_SVG) {
+      const idolBox = geo.boundingBox;
+      const idolH = idolBox.max.y - idolBox.min.y;
+      const idolR = Math.max(idolBox.max.x - idolBox.min.x, idolBox.max.z - idolBox.min.z) / 2;
+      const paths = new SVGLoader().parse(window.BABA_WORDMARK_SVG).paths;
+      const shapes = [];
+      paths.forEach(p => SVGLoader.createShapes(p).forEach(s => shapes.push(s)));
+      let wg = new THREE.ExtrudeGeometry(shapes, { depth: 48, bevelEnabled: true, bevelThickness: 7, bevelSize: 5, bevelSegments: 2, curveSegments: 4 });
+      wg.computeBoundingBox();
+      const wb = wg.boundingBox, sw = wb.max.x - wb.min.x, sh = wb.max.y - wb.min.y, sd = wb.max.z - wb.min.z;
+      wg.translate(-wb.min.x, -wb.min.y, -wb.min.z);   // → 0..sw, 0..sh, 0..sd
+      wg.scale(1, -1, 1); wg.translate(0, sh, 0);       // flip SVG y-down → up
+      const N = 2;
+      const R = idolR * 1.08;
+      const unit = (2 * Math.PI * R) / N;               // arc length per wordmark + gap
+      const Wm = unit / 1.5;                            // gap = 0.5 * wordmark width
+      const s = Wm / sw;
+      wg.scale(s, s, s);
+      const depth = sd * s, gh = sh * s;
+      wg.translate(0, -gh / 2, 0);                      // centre vertically
+      const parts = [];
+      for (let i = 0; i < N; i++) { const g = wg.clone(); g.translate(i * unit, 0, 0); parts.push(g); }
+      let merged = BufferGeometryUtils.mergeGeometries(parts);
+      wg.dispose(); parts.forEach(p => p.dispose());
+      const pos = merged.attributes.position, v = new THREE.Vector3();
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        const theta = v.x / R, r = R + (v.z - depth / 2);
+        pos.setXYZ(i, r * Math.sin(theta), v.y, r * Math.cos(theta));
+      }
+      pos.needsUpdate = true;
+      merged.deleteAttribute('normal'); merged.deleteAttribute('uv');   // weld by position for smooth shading
+      merged = BufferGeometryUtils.mergeVertices(merged);
+      merged.computeVertexNormals();
+      const wm = createChalkMaterial({ color: '#f82538', roughness: 0.82, metalness: 0 }); wm.side = THREE.DoubleSide;
+      wordRing = new THREE.Group();
+      const rm = new THREE.Mesh(merged, wm);
+      wordRing.add(rm);
+      wordRing.rotation.x = 0.16;                        // slight orbital tilt
+      wordRing.position.y = idolH * 0.04;
+      scene.add(wordRing);
+    }
+  } catch (e) { console.warn('wordmark ring', e); }
+
+  // Frame the camera
+  const size = bb.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const dist = maxDim / (2 * Math.tan(camera.fov * Math.PI / 360)) * 1.85;
+  camera.position.set(0, size.y * 0.05, dist);
+  controls.target.set(0, 0, 0);
+  controls.update();
+
+  let raf = 0, disposed = false;
+  function resize() {
+    const w = canvas.clientWidth || canvas.parentElement?.clientWidth || 1;
+    const h = canvas.clientHeight || canvas.parentElement?.clientHeight || 1;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+  const ro = new ResizeObserver(resize);
+  ro.observe(canvas);
+  if (canvas.parentElement) ro.observe(canvas.parentElement);
+  resize();
+
+  const ringClock = new THREE.Clock();
+  function animate() {
+    if (disposed) return;
+    if (wordRing) wordRing.rotation.y += ringClock.getDelta() * 0.35;   // orbit
+    controls.update();
+    renderer.render(scene, camera);
+    raf = requestAnimationFrame(animate);
+  }
+  animate();
+
+  return {
+    dispose() {
+      disposed = true;
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      controls.dispose();
+      geo.dispose();
+      material.dispose();
+      renderer.dispose();
+    },
+  };
+}
+
+window.__mountBottle = (canvas, opts) => createBottleViewer(canvas, opts);
+window.__mountChalk  = (canvas, opts) => createChalkViewer(canvas, opts);
+window.dispatchEvent(new Event('viewers-ready'));
+</script>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- Animated sky behind cutouts           -->
+<!-- ═══════════════════════════════════════ -->
+<script>
+(function(){
+  const sky = document.getElementById('skyCanvas');
+  const sg = sky.getContext('webgl2');
+  if(!sg) return;
+
+  const SV=`#version 300 es
+  precision highp float;
+  const vec2 P[4]=vec2[4](vec2(-1,-1),vec2(1,-1),vec2(-1,1),vec2(1,1));
+  out vec2 vUV;
+  void main(){gl_Position=vec4(P[gl_VertexID],0,1);vUV=P[gl_VertexID]*.5+.5;}`;
+
+  const SF=`#version 300 es
+  precision highp float;
+  in vec2 vUV;
+  out vec4 o;
+  uniform float uTime;
+  uniform vec2 uRes;
+
+  // ── Simplex-style 3D noise (compact) ──
+  vec4 perm(vec4 x){return mod(((x*34.)+1.)*x,289.);}
+  float snoise3(vec3 v){
+    const vec2 C=vec2(1./6.,1./3.);
+    const vec4 D=vec4(0,.5,1,2);
+    vec3 i=floor(v+dot(v,C.yyy)),x0=v-i+dot(i,C.xxx);
+    vec3 g=step(x0.yzx,x0.xyz),l=1.-g;
+    vec3 i1=min(g,l.zxy),i2=max(g,l.zxy);
+    vec3 x1=x0-i1+C.x,x2=x0-i2+C.y,x3=x0-.5;
+    i=mod(i,289.);
+    vec4 p=perm(perm(perm(i.z+vec4(0,i1.z,i2.z,1))+i.y+vec4(0,i1.y,i2.y,1))+i.x+vec4(0,i1.x,i2.x,1));
+    vec4 j=p-49.*floor(p/49.);
+    vec4 x_=floor(j/7.),y_=floor(j-7.*x_);
+    vec4 x2_=(x_*2.+.5)/7.-1.,y2_=(y_*2.+.5)/7.-1.;
+    vec4 h=1.-abs(x2_)-abs(y2_);
+    vec4 b0=vec4(x2_.xy,y2_.xy),b1=vec4(x2_.zw,y2_.zw);
+    vec4 s0=floor(b0)*2.+1.,s1=floor(b1)*2.+1.;
+    vec4 sh=-step(h,vec4(0));
+    vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy,a1=b1.xzyw+s1.xzyw*sh.zzww;
+    vec3 g0=vec3(a0.xy,h.x),g1=vec3(a0.zw,h.y),g2=vec3(a1.xy,h.z),g3=vec3(a1.zw,h.w);
+    vec4 norm=1.79284291400159-.85373472095314*vec4(dot(g0,g0),dot(g1,g1),dot(g2,g2),dot(g3,g3));
+    g0*=norm.x;g1*=norm.y;g2*=norm.z;g3*=norm.w;
+    vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.);
+    m*=m; m*=m;
+    return 42.*dot(m,vec4(dot(g0,x0),dot(g1,x1),dot(g2,x2),dot(g3,x3)));
+  }
+
+  // FBM using 3D simplex 4 octaves like the reference
+  float fbm3(vec3 p){
+    float v=0.,a=.5;
+    for(int i=0;i<3;i++){v+=snoise3(p)*a;p*=2.0;a*=.5;}
+    return v*.5+.5;
+  }
+
+  // Levels: gamma correct a range-clamped value (matches reference levels.glsl)
+  float levels(float c, float lo, float gamma, float hi){
+    float r=clamp((c-lo)/(hi-lo),0.,1.);
+    return pow(r,1./gamma);
+  }
+
+  void main(){
+    vec2 uv=vUV;
+    float ar=uRes.x/uRes.y;
+    float t=uTime;
+
+    // Sky gradient
+    vec3 skyTop=vec3(.12,.28,.65);
+    vec3 skyMid=vec3(.35,.55,.88);
+    vec3 skyBot=vec3(.6,.78,.95);
+    vec3 sky=uv.y>.5?mix(skyMid,skyTop,smoothstep(.5,1.,uv.y)):mix(skyBot,skyMid,smoothstep(0.,.5,uv.y));
+
+    // ── Cloud layer slow drift + animate ──
+    vec2 cp=vec2(uv.x*ar + t*0.005, uv.y + t*0.002);
+
+    // Pass 1: large-scale FBM displaces UV (billowy warp)
+    float nBig=fbm3(vec3(cp*17.8, t*0.002));
+    vec2 warped=cp+nBig*0.04;
+
+    // Pass 2: smaller simplex displaces again (detail warp)
+    float nSmall=snoise3(vec3(warped*2.7, t*0.0015));
+    warped+=nSmall*0.08;
+
+    // Two scrolling noise samples drifting with the clouds
+    float n1=fbm3(vec3(cp.x,cp.y-t*0.003,t*0.001)*4.);
+    float n2=fbm3(vec3(cp.x+5.,cp.y+3.,t*0.001)*4.);
+
+    // Levels on combined noise → alpha mask
+    float alpha=levels((n1+n2)*0.6,0.2,0.4,0.7);
+
+    // Shape from warped coordinates
+    float shape=fbm3(vec3(warped*3., t*0.0008));
+    shape=smoothstep(.35,.65,shape);
+
+    alpha*=shape;
+    alpha*=smoothstep(0.,.25,uv.y); // fade at horizon
+
+    // Cloud color lit white, slight shadow in thin areas
+    vec3 cloudCol=mix(vec3(.78,.82,.9),vec3(1),smoothstep(0.,.8,alpha));
+
+    vec3 col=mix(sky,cloudCol,min(alpha,1.));
+
+    // Horizon haze
+    col=mix(col,vec3(.72,.8,.92),smoothstep(.2,0.,uv.y)*.35);
+
+    o=vec4(col,1);
+  }`;
+
+  function cs(s,t){const sh=sg.createShader(t);sg.shaderSource(sh,s);sg.compileShader(sh);if(!sg.getShaderParameter(sh,sg.COMPILE_STATUS))console.error(sg.getShaderInfoLog(sh));return sh;}
+  const prog=sg.createProgram();
+  sg.attachShader(prog,cs(SV,sg.VERTEX_SHADER));
+  sg.attachShader(prog,cs(SF,sg.FRAGMENT_SHADER));
+  sg.linkProgram(prog);
+  const vao=sg.createVertexArray();
+  const uTime=sg.getUniformLocation(prog,'uTime');
+  const uRes=sg.getUniformLocation(prog,'uRes');
+
+  // Half-res clouds are soft, don't need full DPR
+  function loop(t){
+    const w=window.innerWidth;
+    const h=window.innerHeight;
+    if(sky.width!==w||sky.height!==h){sky.width=w;sky.height=h;}
+    sg.viewport(0,0,w,h);
+    sg.useProgram(prog);
+    sg.uniform1f(uTime,t*.003);
+    sg.uniform2f(uRes,w,h);
+    sg.bindVertexArray(vao);
+    sg.drawArrays(sg.TRIANGLE_STRIP,0,4);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+
+<script src="rock-config.js"></script>
+<script>
+(function(){
+  const canvas = document.getElementById('rockCanvas');
+  const gl = canvas.getContext('webgl2', {antialias:false, premultipliedAlpha:false, alpha:true});
+  if (!gl) return;
+  gl.getExtension('EXT_color_buffer_float');
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Rock settings come from rock-config.js (window.ROCK_CONFIG), generated by
+  // the Terrain Lite editor (frames-lite.html → "Export to file").
+  //   .primary   → full-screen background terrain (this canvas, render())
+  //   .secondary → rock slab frames (hero/header, gallery renderSlabs())
+  // The fallback below is used only if rock-config.js is missing/blocked.
+  // ──────────────────────────────────────────────────────────────────────────
+  const ROCK_FALLBACK = {
+    primary: {
+      seed:42, scale:12, height:8, rough:0.5, octaves:5, lac:2.0, gain:0.5, warp:60,
+      strata:0.4, veins:0.3, cracks:0.5, pitting:0.3, drift:0.5,
+      edgeAmt:35, edgeFreq:25, edgeDetail:3, lipWidth:30,
+      mat:{col0:[118,120,123],col1:[148,150,154],col2:[88,90,94],col3:[132,134,138],
+           weights:[1,0.5,0.4,0.3],strata:0.8,veins:0.15,pitting:0.4,spec:0.12,rough:0.75},
+      light:{angle:135,elev:40,brightness:1.3,ambient:0.35,color:[0.95,0.96,1],normalStr:9.4}
+    },
+    secondary: {
+      scale:14, height:7, rough:0.55, octaves:5, lac:2.0, gain:0.5, warp:50,
+      strata:0.5, veins:0.2, cracks:0.3, pitting:0.25, drift:0.4,
+      edgeAmt:25, edgeFreq:22, edgeDetail:3, lipWidth:18,
+      mat:{col0:[155,156,158],col1:[190,191,194],col2:[120,121,124],col3:[172,173,176],
+           weights:[1,0.5,0.4,0.3],strata:0.8,veins:0.15,pitting:0.4,spec:0.12,rough:0.7},
+      light:{angle:135,elev:40,brightness:1.4,ambient:0.4,color:[1,1,1],normalStr:8}
+    }
+  };
+  const ROCK_CFG = (window.ROCK_CONFIG && window.ROCK_CONFIG.primary && window.ROCK_CONFIG.secondary)
+    ? window.ROCK_CONFIG : ROCK_FALLBACK;
+
+  const VERT = `#version 300 es
+  precision highp float;
+  const vec2 P[4]=vec2[4](vec2(-1,-1),vec2(1,-1),vec2(-1,1),vec2(1,1));
+  out vec2 vUV;
+  void main(){gl_Position=vec4(P[gl_VertexID],0,1);vUV=P[gl_VertexID]*.5+.5;}`;
+
+  // ── Heightmap: plain rock terrain + cut/recess panels ──
+  const HF = `#version 300 es
+  precision highp float;
+  in vec2 vUV;
+  layout(location=0) out vec4 outGeo;
+  layout(location=1) out vec4 outDetail;
+  uniform vec2 uRes;
+  uniform float uSeed, uScale, uHeight, uRough, uLac, uGain, uWarp;
+  uniform int uOctaves;
+  uniform float uStrata, uVeins, uCracks, uPitting, uDrift;
+  uniform float uScrollY; // content scroll offset in UV space
+
+  uniform int uPanelCount;
+  uniform vec4 uPanels[16]; // x,y,w,h in pixels on the viewport
+  uniform int uPanelTypes[16]; // 0=cut 1=recess
+  uniform float uEdgeAmt, uEdgeFreq, uLipWidth;
+  uniform int uEdgeDetail;
+
+  vec2 hash2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return -1.+2.*fract(sin(p)*43758.5453);}
+  float gn(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*(3.-2.*f);return mix(mix(dot(hash2(i),f),dot(hash2(i+vec2(1,0)),f-vec2(1,0)),u.x),mix(dot(hash2(i+vec2(0,1)),f-vec2(0,1)),dot(hash2(i+vec2(1,1)),f-vec2(1,1)),u.x),u.y);}
+  float sn(vec2 p,float s){return gn(p+vec2(s*1.7171,s*2.3131));}
+  float fbm(vec2 p,float s,int o,float l,float g){float v=0.,a=1.,f=1.,m=0.;for(int i=0;i<8;i++){if(i>=o)break;v+=sn(p*f,s)*a;m+=a;a*=g;f*=l;}return v/m;}
+  float ridged(vec2 p,float s,int o,float l,float g){float v=0.,a=1.,f=1.,m=0.;for(int i=0;i<8;i++){if(i>=o)break;float n=1.-abs(sn(p*f,s));n*=n;v+=n*a;m+=a;a*=g;f*=l;}return v/m;}
+  float turb(vec2 p,float s,int o,float l,float g){float v=0.,a=1.,f=1.,m=0.;for(int i=0;i<8;i++){if(i>=o)break;v+=abs(sn(p*f,s))*a;m+=a;a*=g;f*=l;}return v/m;}
+
+  float panelSDF(vec2 p,vec4 pn){vec2 c=pn.xy+pn.zw*.5;vec2 d=abs(p-c)-pn.zw*.5;if(d.x>0.&&d.y>0.)return length(d);return max(d.x,d.y);}
+  float warpPanel(vec2 p,vec4 pn,float bS,float bL,float bG){
+    float sd=panelSDF(p,pn); float dw=uEdgeAmt*.8; float fq=uEdgeFreq/1000.;
+    float wx=p.x+fbm(p*fq*.8,bS+7777.,3,bL,bG)*dw;
+    float wy=p.y+fbm(vec2(p.x*fq*.8+99.,p.y*fq*.8+99.),bS+7777.,3,bL,bG)*dw;
+    vec2 wp=vec2(wx,wy); int eo=uEdgeDetail;
+    float w=fbm(wp*fq,bS+5555.,eo+2,bL,bG)*uEdgeAmt
+           +fbm(wp*fq*3.2,bS+6666.,eo+1,bL+.3,bG)*uEdgeAmt*.4
+           +fbm(wp*fq*8.,bS+7777.,eo,bL+.5,bG-.05)*uEdgeAmt*.15;
+    sd+=w*(1.-min(1.,abs(sd)/(uEdgeAmt*3.)));
+    return sd;
+  }
+
+  void main(){
+    // Pixel coords with scroll offset applied so terrain scrolls
+    vec2 px=vec2(vUV.x, 1.-vUV.y)*uRes;
+    float worldY = px.y + uScrollY;
+    float x=px.x, y=worldY;
+
+    float seed=uSeed, freq=uScale/150., depth=uHeight/12.;
+    int oct=uOctaves; float lac=uLac, gain=uGain, warp=uWarp;
+
+    // Domain warp
+    float dwx=x+fbm(vec2(x,y)*.004,seed+333.,3,lac,gain)*warp;
+    float dwy=y+fbm(vec2(x+50.,y+50.)*.004,seed+777.,3,lac,gain)*warp;
+    vec2 p1=vec2(dwx,dwy)*freq*.25, p2=vec2(dwx,dwy)*freq*.7;
+
+    // Hybrid noise
+    float primary=ridged(p1,seed,oct,lac,gain)*.4
+                 +fbm(p2,seed+333.,oct,lac+.05,gain)*.35
+                 +turb(vec2(x,y)*freq*2.5,seed+777.,max(1,oct-2),lac,gain)*.12*uRough;
+    float mega=fbm(vec2(x,y)*freq*.08,seed+333.,3,lac,gain);
+    float crack=1.-pow(abs(fbm(vec2(dwx,dwy)*freq*1.2,seed+1111.,oct,lac,gain)),.2);
+    float h=mega*.2+primary-crack*.2*uCracks;
+    h=max(.03,h)*depth;
+
+    // Detail channels
+    float sW=fbm(vec2(x,y)*.002,seed+333.,3,lac,gain)*(60.+warp*.3)+fbm(vec2(x,y)*.008,seed+1111.,2,lac,gain)*25.;
+    float strata=(sin((y+sW)*.05)*.5+.5)*uStrata;
+    float veinN=fbm(vec2(dwx,dwy)*.008+50.,seed+777.,max(3,oct),lac+.2,gain);
+    float veins=pow(max(0.,1.-abs(veinN)*5.),4.)*uVeins;
+    float pitting=pow(turb(vec2(x,y)*.04,seed+1111.,4,2.5,.45),1.5)*uPitting;
+    float colorVar=fbm(vec2(dwx,dwy)*.003+100.,seed,4,lac,gain)*uDrift;
+
+    // Panels: cut and recess (in viewport pixel space, no scroll offset)
+    float minCut=999., minRec=999.;
+    for(int i=0;i<16;i++){
+      if(i>=uPanelCount) break;
+      float d=warpPanel(px, uPanels[i], seed, lac, gain);
+      if(uPanelTypes[i]==0) minCut=min(minCut,d);
+      else minRec=min(minRec,d);
+    }
+
+    if(minCut<0.){ outGeo=vec4(0,0,0,0); outDetail=vec4(0); return; }
+
+    float edgeDist=min(minCut,minRec);
+    bool inRecess=minRec<0.;
+
+    if(inRecess){float rW=20.,rF=depth*.02,rD=-minRec;if(rD>rW)h=rF;else{float t=rD/rW;t=t*t;h=h*(1.-t)+rF*t;}}
+    if(edgeDist<uLipWidth&&edgeDist>0.){float t=1.-edgeDist/uLipWidth;h+=t*t*depth*.6*(.6+fbm(px*.06,seed+5555.,3,2.,.5)*.8);}
+
+    float eM=min(min(px.x,uRes.x-1.-px.x),min(px.y,uRes.y-1.-px.y));
+    if(eM<4.)h*=eM/4.;
+    h=clamp(h,0.,1.);
+    outGeo=vec4(h,0,0,0);
+    outDetail=vec4(strata,veins,pitting,colorVar);
+  }`;
+
+  // ── Shading: sandstone material ──
+  const SF = `#version 300 es
+  precision highp float;
+  in vec2 vUV; out vec4 outColor;
+  uniform sampler2D uGeoTex, uDetailTex;
+  uniform vec2 uRes;
+  uniform vec3 uCol0,uCol1,uCol2,uCol3;
+  uniform vec4 uWeights;
+  uniform float uMatStrata,uMatVeins,uMatPitting,uMatSpec,uMatRough;
+  uniform vec3 uLightDir,uFillDir,uLightColor;
+  uniform float uBrightness,uAmbient,uNormalStr;
+
+  void main(){
+    vec2 tx=1./uRes;
+    vec4 geo=texture(uGeoTex,vUV); vec4 det=texture(uDetailTex,vUV);
+    float h=geo.r;
+    if(h<.001){outColor=vec4(0,0,0,0);return;}
+    float hL=texture(uGeoTex,vUV+vec2(-tx.x,0)).r,hR=texture(uGeoTex,vUV+vec2(tx.x,0)).r;
+    float hU=texture(uGeoTex,vUV+vec2(0,tx.y)).r,hD=texture(uGeoTex,vUV+vec2(0,-tx.y)).r;
+    vec3 N=normalize(vec3((hL-hR)*uNormalStr,(hU-hD)*uNormalStr,1.));
+    float strata=det.r,veins=det.g,pitting=det.b,colorV=det.a;
+    float diff=max(0.,dot(N,uLightDir)),fill=max(0.,dot(N,uFillDir))*.25;
+    vec3 halfV=normalize(uLightDir+vec3(0,0,1));
+    float spec=pow(max(0.,dot(N,halfV)),20.+(1.-uMatRough)*80.)*uMatSpec;
+    vec3 mc=uCol0;
+    mc=mix(mc,uCol1,strata*uMatStrata*uWeights.y);
+    mc=mix(mc,uCol2,(1.-h)*uWeights.z*.6+pitting*uMatPitting*uWeights.z*.4);
+    mc=mix(mc,uCol3,veins*uMatVeins*uWeights.w);
+    mc+=vec3(colorV*20.-10.,colorV*15.-8.,colorV*10.-5.);
+    mc*=1.-pitting*uMatPitting*.2;
+    float lit=uAmbient+(diff*.7+fill)*uBrightness;
+    vec3 color=mc/255.*lit*uLightColor+spec*(200./255.)*uLightColor*uBrightness;
+    color*=.65+h*.35;
+    outColor=vec4(clamp(color,0.,1.),1);
+  }`;
+
+  function cs(s,t){const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS))console.error(gl.getShaderInfoLog(sh));return sh;}
+  function lp(v,f){const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))console.error(gl.getProgramInfoLog(p));return p;}
+  const vert=cs(VERT,gl.VERTEX_SHADER);
+  const hP=lp(vert,cs(HF,gl.FRAGMENT_SHADER));
+  const sP=lp(vert,cs(SF,gl.FRAGMENT_SHADER));
+
+  let t0,t1,fbo,curW=0,curH=0;
+  const vao=gl.createVertexArray();
+
+  function mkTex(w,h){const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA32F,w,h,0,gl.RGBA,gl.FLOAT,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);return t;}
+
+  function ensureFBO(w,h){
+    if(w===curW&&h===curH) return;
+    if(t0)gl.deleteTexture(t0);if(t1)gl.deleteTexture(t1);if(fbo)gl.deleteFramebuffer(fbo);
+    t0=mkTex(w,h);t1=mkTex(w,h);
+    fbo=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t0,0);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT1,gl.TEXTURE_2D,t1,0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+    curW=w;curH=h;
+  }
+
+  function setU(p,n,t,v){const l=gl.getUniformLocation(p,n);if(!l)return;if(t==='1i')gl.uniform1i(l,v);else if(t==='1f')gl.uniform1f(l,v);else if(t==='2f')gl.uniform2f(l,v[0],v[1]);else if(t==='3f')gl.uniform3f(l,v[0],v[1],v[2]);else if(t==='4f')gl.uniform4f(l,v[0],v[1],v[2],v[3]);}
+
+  // Collect panels from visible data-rock elements
+  // getBoundingClientRect returns CSS viewport coords; canvas pixels = CSS * (canvasW/cssW)
+  function collectPanels(){
+    const panels=[];
+    const W=canvas.width, H=canvas.height;
+    const sx=W/window.innerWidth, sy=H/window.innerHeight;
+    document.querySelectorAll('[data-rock]').forEach(el=>{
+      if(panels.length>=16) return;
+      const r=el.getBoundingClientRect();
+      const x=r.left*sx, y=r.top*sy, w=r.width*sx, h=r.height*sy;
+      if(y+h<0||y>H) return; // off-screen, skip
+      const pad=8*sx;
+      panels.push({x:x-pad, y:y-pad, w:w+pad*2, h:h+pad*2, type:el.dataset.rock});
+    });
+    return panels;
+  }
+
+  function render(){
+    const W=canvas.width, H=canvas.height;
+    ensureFBO(W,H);
+    const contentEl=document.querySelector('.content');
+    const scrollY=contentEl?contentEl.scrollTop:0;
+    const sy=H/window.innerHeight;
+    const panels=collectPanels();
+
+    gl.clearColor(0,0,0,0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.bindVertexArray(vao);
+
+    // Pass 1: heightmap
+    gl.bindFramebuffer(gl.FRAMEBUFFER,fbo);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]);
+    gl.viewport(0,0,W,H);
+    gl.useProgram(hP);
+    setU(hP,'uRes','2f',[W,H]);
+    const C = ROCK_CFG.primary, M = C.mat, Lt = C.light;
+    setU(hP,'uSeed','1f',C.seed);
+    setU(hP,'uScale','1f',C.scale);
+    setU(hP,'uHeight','1f',C.height);
+    setU(hP,'uRough','1f',C.rough);
+    setU(hP,'uOctaves','1i',C.octaves);
+    setU(hP,'uLac','1f',C.lac);
+    setU(hP,'uGain','1f',C.gain);
+    setU(hP,'uWarp','1f',C.warp);
+    setU(hP,'uStrata','1f',C.strata);
+    setU(hP,'uVeins','1f',C.veins);
+    setU(hP,'uCracks','1f',C.cracks);
+    setU(hP,'uPitting','1f',C.pitting);
+    setU(hP,'uDrift','1f',C.drift);
+    setU(hP,'uScrollY','1f',scrollY*sy);
+
+    setU(hP,'uPanelCount','1i',panels.length);
+    for(let i=0;i<16;i++){
+      if(i<panels.length){const p=panels[i];setU(hP,`uPanels[${i}]`,'4f',[p.x,p.y,p.w,p.h]);setU(hP,`uPanelTypes[${i}]`,'1i',p.type==='cut'?0:1);}
+      else{setU(hP,`uPanels[${i}]`,'4f',[0,0,0,0]);setU(hP,`uPanelTypes[${i}]`,'1i',0);}
+    }
+    setU(hP,'uEdgeAmt','1f',C.edgeAmt);
+    setU(hP,'uEdgeFreq','1f',C.edgeFreq);
+    setU(hP,'uEdgeDetail','1i',C.edgeDetail);
+    setU(hP,'uLipWidth','1f',C.lipWidth);
+    gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+
+    // Pass 2: shade
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+    gl.viewport(0,0,W,H);
+    gl.useProgram(sP);
+    setU(sP,'uRes','2f',[W,H]);
+    setU(sP,'uGeoTex','1i',0);
+    setU(sP,'uDetailTex','1i',1);
+    // Material (from ROCK_CONFIG)
+    setU(sP,'uCol0','3f',M.col0);
+    setU(sP,'uCol1','3f',M.col1);
+    setU(sP,'uCol2','3f',M.col2);
+    setU(sP,'uCol3','3f',M.col3);
+    setU(sP,'uWeights','4f',M.weights);
+    setU(sP,'uMatStrata','1f',M.strata);
+    setU(sP,'uMatVeins','1f',M.veins);
+    setU(sP,'uMatPitting','1f',M.pitting);
+    setU(sP,'uMatSpec','1f',M.spec);
+    setU(sP,'uMatRough','1f',M.rough);
+    // Lighting (from ROCK_CONFIG)
+    const aR=Lt.angle*Math.PI/180,eR=Lt.elev*Math.PI/180,cE=Math.cos(eR);
+    const lx=cE*Math.cos(aR),ly=-Math.sin(eR),lz=cE*Math.sin(aR),ll=Math.sqrt(lx*lx+ly*ly+lz*lz);
+    const fx=-lx/ll*.3,fy=-.2,fz=lz/ll*.3+.5,fl=Math.sqrt(fx*fx+fy*fy+fz*fz);
+    setU(sP,'uLightDir','3f',[lx/ll,ly/ll,lz/ll]);
+    setU(sP,'uFillDir','3f',[fx/fl,fy/fl,fz/fl]);
+    setU(sP,'uBrightness','1f',Lt.brightness);
+    setU(sP,'uAmbient','1f',Lt.ambient);
+    setU(sP,'uLightColor','3f',Lt.color);
+    setU(sP,'uNormalStr','1f',Lt.normalStr);
+
+    gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,t0);
+    gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,t1);
+    gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+    gl.bindVertexArray(null);
+  }
+
+  // ── Rock slab frames: each .slab-canvas gets its own GL context ──
+  const slabs = new Map(); // canvas element → {gl, hP, sP, t0, t1, fbo, vao, rw, rh, seed}
+  let slabSeed = 137;
+
+  function initSlab(nc) {
+    if (slabs.has(nc)) return slabs.get(nc);
+    const g = nc.getContext('webgl2', {antialias:false, premultipliedAlpha:false});
+    if (!g) return null;
+    g.getExtension('EXT_color_buffer_float');
+    function sc(s,t){const sh=g.createShader(t);g.shaderSource(sh,s);g.compileShader(sh);return sh;}
+    function lk(v,f){const p=g.createProgram();g.attachShader(p,v);g.attachShader(p,f);g.linkProgram(p);return p;}
+    const v=sc(VERT,g.VERTEX_SHADER);
+    const s = {gl:g, hP:lk(v,sc(HF,g.FRAGMENT_SHADER)), sP:lk(v,sc(SF,g.FRAGMENT_SHADER)), vao:g.createVertexArray(), t0:null, t1:null, fbo:null, rw:0, rh:0, seed:slabSeed};
+    slabSeed += 71;
+    slabs.set(nc, s);
+    return s;
+  }
+
+  function slabSetU(g, p, n, t, v) {
+    const l=g.getUniformLocation(p,n);if(!l)return;
+    if(t==='1i')g.uniform1i(l,v);else if(t==='1f')g.uniform1f(l,v);
+    else if(t==='2f')g.uniform2f(l,v[0],v[1]);else if(t==='3f')g.uniform3f(l,v[0],v[1],v[2]);
+    else if(t==='4f')g.uniform4f(l,v[0],v[1],v[2],v[3]);
+  }
+
+  function ensureSlabFBO(s, w, h) {
+    if(w===s.rw&&h===s.rh) return;
+    const g=s.gl;
+    function mt(w,h){const t=g.createTexture();g.bindTexture(g.TEXTURE_2D,t);g.texImage2D(g.TEXTURE_2D,0,g.RGBA32F,w,h,0,g.RGBA,g.FLOAT,null);g.texParameteri(g.TEXTURE_2D,g.TEXTURE_MIN_FILTER,g.NEAREST);g.texParameteri(g.TEXTURE_2D,g.TEXTURE_MAG_FILTER,g.NEAREST);g.texParameteri(g.TEXTURE_2D,g.TEXTURE_WRAP_S,g.CLAMP_TO_EDGE);g.texParameteri(g.TEXTURE_2D,g.TEXTURE_WRAP_T,g.CLAMP_TO_EDGE);return t;}
+    if(s.t0)g.deleteTexture(s.t0);if(s.t1)g.deleteTexture(s.t1);if(s.fbo)g.deleteFramebuffer(s.fbo);
+    s.t0=mt(w,h);s.t1=mt(w,h);
+    s.fbo=g.createFramebuffer();g.bindFramebuffer(g.FRAMEBUFFER,s.fbo);
+    g.framebufferTexture2D(g.FRAMEBUFFER,g.COLOR_ATTACHMENT0,g.TEXTURE_2D,s.t0,0);
+    g.framebufferTexture2D(g.FRAMEBUFFER,g.COLOR_ATTACHMENT1,g.TEXTURE_2D,s.t1,0);
+    g.bindFramebuffer(g.FRAMEBUFFER,null);
+    s.rw=w;s.rh=h;
+  }
+
+  function renderSlabs() {
+    document.querySelectorAll('.slab-canvas').forEach(nc => {
+      let s = slabs.get(nc);
+      if (!s) s = initSlab(nc);
+      if (!s) return;
+      const g = s.gl;
+      const frame = nc.parentElement;
+      const cw = frame.offsetWidth;
+      const ch = frame.offsetHeight;
+
+      // Collect cut panels inside this frame
+      const frameRect = frame.getBoundingClientRect();
+      const sx = cw/frame.offsetWidth, sy = ch/frame.offsetHeight;
+      const cuts = [];
+      frame.querySelectorAll('[data-slab-cut]').forEach(el => {
+        if(cuts.length>=16) return;
+        const r = el.getBoundingClientRect();
+        const pad = 4*sx;
+        cuts.push({
+          x: (r.left - frameRect.left)*sx - pad,
+          y: (r.top - frameRect.top)*sy - pad,
+          w: r.width*sx + pad*2,
+          h: r.height*sy + pad*2,
+        });
+      });
+
+      // Build a cache key from size + panel rects
+      const key = cw+'x'+ch+'_'+cuts.map(c=>Math.round(c.x)+','+Math.round(c.y)+','+Math.round(c.w)+','+Math.round(c.h)).join(';');
+      if(s.cacheKey===key) return;
+      s.cacheKey=key;
+
+      if(nc.width!==cw||nc.height!==ch){nc.width=cw;nc.height=ch;}
+      ensureSlabFBO(s,cw,ch);
+
+      const S = (p,n,t,v) => slabSetU(g,p,n,t,v);
+      g.bindVertexArray(s.vao);
+
+      // Heightmap
+      g.bindFramebuffer(g.FRAMEBUFFER,s.fbo);
+      g.drawBuffers([g.COLOR_ATTACHMENT0,g.COLOR_ATTACHMENT1]);
+      g.viewport(0,0,cw,ch);
+      g.useProgram(s.hP);
+      const C = ROCK_CFG.secondary, M = C.mat, Lt = C.light;
+      S(s.hP,'uRes','2f',[cw,ch]);
+      S(s.hP,'uSeed','1f',s.seed);   // per-slab seed kept for frame-to-frame variation
+      S(s.hP,'uScale','1f',C.scale);
+      S(s.hP,'uHeight','1f',C.height);
+      S(s.hP,'uRough','1f',C.rough);
+      S(s.hP,'uOctaves','1i',C.octaves);
+      S(s.hP,'uLac','1f',C.lac);
+      S(s.hP,'uGain','1f',C.gain);
+      S(s.hP,'uWarp','1f',C.warp);
+      S(s.hP,'uStrata','1f',C.strata);
+      S(s.hP,'uVeins','1f',C.veins);
+      S(s.hP,'uCracks','1f',C.cracks);
+      S(s.hP,'uPitting','1f',C.pitting);
+      S(s.hP,'uDrift','1f',C.drift);
+      S(s.hP,'uScrollY','1f',0);
+      S(s.hP,'uPanelCount','1i',cuts.length);
+      for(let i=0;i<16;i++){
+        if(i<cuts.length){S(s.hP,`uPanels[${i}]`,'4f',[cuts[i].x,cuts[i].y,cuts[i].w,cuts[i].h]);S(s.hP,`uPanelTypes[${i}]`,'1i',0);}
+        else{S(s.hP,`uPanels[${i}]`,'4f',[0,0,0,0]);S(s.hP,`uPanelTypes[${i}]`,'1i',0);}
+      }
+      S(s.hP,'uEdgeAmt','1f',C.edgeAmt);
+      S(s.hP,'uEdgeFreq','1f',C.edgeFreq);
+      S(s.hP,'uEdgeDetail','1i',C.edgeDetail);
+      S(s.hP,'uLipWidth','1f',C.lipWidth);
+      g.drawArrays(g.TRIANGLE_STRIP,0,4);
+
+      // Shade
+      g.bindFramebuffer(g.FRAMEBUFFER,null);
+      g.viewport(0,0,cw,ch);
+      g.useProgram(s.sP);
+      S(s.sP,'uRes','2f',[cw,ch]);
+      S(s.sP,'uGeoTex','1i',0);
+      S(s.sP,'uDetailTex','1i',1);
+      S(s.sP,'uCol0','3f',M.col0);
+      S(s.sP,'uCol1','3f',M.col1);
+      S(s.sP,'uCol2','3f',M.col2);
+      S(s.sP,'uCol3','3f',M.col3);
+      S(s.sP,'uWeights','4f',M.weights);
+      S(s.sP,'uMatStrata','1f',M.strata);
+      S(s.sP,'uMatVeins','1f',M.veins);
+      S(s.sP,'uMatPitting','1f',M.pitting);
+      S(s.sP,'uMatSpec','1f',M.spec);
+      S(s.sP,'uMatRough','1f',M.rough);
+      const aR=Lt.angle*Math.PI/180,eR=Lt.elev*Math.PI/180,cE=Math.cos(eR);
+      const lx=cE*Math.cos(aR),ly=-Math.sin(eR),lz=cE*Math.sin(aR),ll=Math.sqrt(lx*lx+ly*ly+lz*lz);
+      const fx=-lx/ll*.3,fy=-.2,fz=lz/ll*.3+.5,fl=Math.sqrt(fx*fx+fy*fy+fz*fz);
+      S(s.sP,'uLightDir','3f',[lx/ll,ly/ll,lz/ll]);
+      S(s.sP,'uFillDir','3f',[fx/fl,fy/fl,fz/fl]);
+      S(s.sP,'uBrightness','1f',Lt.brightness);
+      S(s.sP,'uAmbient','1f',Lt.ambient);
+      S(s.sP,'uLightColor','3f',Lt.color);
+      S(s.sP,'uNormalStr','1f',Lt.normalStr);
+      g.activeTexture(g.TEXTURE0);g.bindTexture(g.TEXTURE_2D,s.t0);
+      g.activeTexture(g.TEXTURE1);g.bindTexture(g.TEXTURE_2D,s.t1);
+      g.drawArrays(g.TRIANGLE_STRIP,0,4);
+      g.bindVertexArray(null);
+    });
+  }
+
+  // ── Dirty-flag rendering: only re-render rock when state changes ──
+  let rockDirty = true;
+
+  function markDirty() { rockDirty = true; }
+
+  // Listen for scroll, resize, and mutation
+  function hookDirtyListeners() {
+    const contentEl = document.querySelector('.content');
+    if (contentEl) contentEl.addEventListener('scroll', markDirty, { passive: true });
+    window.addEventListener('resize', markDirty);
+    // Watch for DOM changes (screen switches, accordions)
+    const obs = new MutationObserver(markDirty);
+    obs.observe(document.getElementById('app-root'), { childList: true, subtree: true });
+  }
+  // Defer until React mounts
+  setTimeout(hookDirtyListeners, 200);
+
+  function resize(){
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    if(canvas.width!==w||canvas.height!==h){
+      canvas.width=w; canvas.height=h;
+      rockDirty = true;
+    }
+  }
+
+  function loop(){
+    resize();
+    if (rockDirty) {
+      render();
+      renderSlabs();
+      rockDirty = false;
+    }
+    requestAnimationFrame(loop);
+  }
+
+  requestAnimationFrame(loop);
+
+  // Re-render after React mounts the data-rock panels (the first render happens
+  // before mount, so the cutouts would otherwise stay empty until first scroll).
+  [80, 250, 500, 900, 1500, 2500].forEach(t => setTimeout(markDirty, t));
+  window.addEventListener('load', markDirty);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(markDirty).catch(()=>{});
+})();
+</script>
+
+<script>
+const {
+  useState,
+  useCallback,
+  useEffect,
+  useRef
+} = React;
+
+// Shared 3D-viewer mount hook (waits for the viewer module, disposes on unmount)
+function use3DViewer(mountFnName, opts) {
+  const ref = useRef(null);
+  useEffect(() => {
+    let viewer = null,
+      cancelled = false;
+    const mount = () => {
+      const fn = window[mountFnName];
+      if (cancelled || !ref.current || !fn) return;
+      viewer = fn(ref.current, {
+        ...opts,
+        transparentBg: true
+      });
+    };
+    if (window[mountFnName]) mount();else window.addEventListener('viewers-ready', mount, {
+      once: true
+    });
+    return () => {
+      cancelled = true;
+      window.removeEventListener('viewers-ready', mount);
+      if (viewer && viewer.dispose) viewer.dispose();
+    };
+  }, []);
+  return ref;
+}
+// Squeeze bottle (bottle-config.js via bottle-viewer.js)
+function BottleView({
+  interactive = true,
+  autoRotate = false
+}) {
+  const ref = use3DViewer('__mountBottle', {
+    interactive,
+    autoRotate
+  });
+  return /*#__PURE__*/React.createElement("canvas", {
+    ref: ref,
+    style: {
+      width: '100%',
+      height: '100%',
+      display: 'block',
+      cursor: interactive ? 'grab' : 'default'
+    }
+  });
+}
+// Chalk idol (Baba.obj via chalk-viewer.js)
+function ChalkView({
+  interactive = false,
+  autoRotate = true
+}) {
+  const ref = use3DViewer('__mountChalk', {
+    interactive,
+    autoRotate
+  });
+  return /*#__PURE__*/React.createElement("canvas", {
+    ref: ref,
+    style: {
+      width: '100%',
+      height: '100%',
+      display: 'block'
+    }
+  });
+}
+// Behind-the-frame model: its canvas lives in #model-layer (between sky and rock),
+// tracks its parent panel's rect and is oversized by `expand` so its rectangular
+// edges hide behind the frayed rock border and it appears set into the window.
+function use3DPanel(mountFnName, opts, expand) {
+  const marker = useRef(null);
+  useEffect(() => {
+    const panel = marker.current && marker.current.parentElement;
+    const layer = document.getElementById('model-layer');
+    if (!panel || !layer) return;
+    const canvas = document.createElement('canvas');
+    canvas.style.cssText = 'position:absolute;pointer-events:none;';
+    layer.appendChild(canvas);
+    let viewer = null,
+      cancelled = false,
+      raf = 0;
+    const place = () => {
+      const r = panel.getBoundingClientRect();
+      const ex = r.width * (expand - 1) / 2,
+        ey = r.height * (expand - 1) / 2;
+      canvas.style.left = r.left - ex + 'px';
+      canvas.style.top = r.top - ey + 'px';
+      canvas.style.width = r.width * expand + 'px';
+      canvas.style.height = r.height * expand + 'px';
+    };
+    const mount = () => {
+      const fn = window[mountFnName];
+      if (cancelled || !fn) return;
+      place();
+      viewer = fn(canvas, {
+        ...opts,
+        transparentBg: true
+      });
+    };
+    if (window[mountFnName]) mount();else window.addEventListener('viewers-ready', mount, {
+      once: true
+    });
+    const loop = () => {
+      if (cancelled) return;
+      place();
+      raf = requestAnimationFrame(loop);
+    };
+    loop();
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      window.removeEventListener('viewers-ready', mount);
+      if (viewer && viewer.dispose) viewer.dispose();
+      canvas.remove();
+    };
+  }, []);
+  return marker;
+}
+function PanelModel({
+  mount,
+  autoRotate = true,
+  expand = 1.5
+}) {
+  const ref = use3DPanel(mount, {
+    interactive: false,
+    autoRotate
+  }, expand);
+  return /*#__PURE__*/React.createElement("i", {
+    ref: ref,
+    style: {
+      display: 'none'
+    }
+  });
+}
+const PRODUCT = {
+  id: 'liquid',
+  name: 'liquid chalk',
+  tagline: 'for climbers who have read spinoza',
+  price: 20,
+  description: 'A suspension of mineral and isopropanol. Vanishes moisture, leaves the friction. A thin film, a clean slate, a small ceremony.',
+  longDescription: ['We grind our own magnesium carbonate in a garage. We suspend it in a high-purity isopropanol. We bottle it by hand.', 'Apply a dime to each palm. Rub until the isopropanol leaves. What remains is a dry, even film that outlasts most pitches. No cloud in the air, no chalk ghost on the holds.'],
+  details: ['75% isopropanol, 25% magnesium carbonate', 'a dime per palm', 'bottled in toronto, ON'],
+  variants: [{
+    id: '100ml',
+    label: '100ml',
+    price: 20,
+    sub: 'no cloud, no mess'
+  }],
+  stock: 'in stock \u00b7 ships from toronto'
+};
+const F = {
+  mantra: 'dust to palm, palm to stone, stone to dust',
+  about_1: 'Baba-gah began as a question: what does the boulder remember of us?',
+  about_2: 'We grind our own chalk in a garage in southern, ontario. The niagara escarpment above us was once the shore of a tropical sea. We think about this a lot.',
+  about_3: 'We believe chalk is a conversation between the climber and the stone. We try to speak plainly. So we make one thing, well.',
+  manifesto: ['1. the hand is a slow animal', '2. the rock is an older animal', '3. dust is the language between them', '4. we are not a brand, we are a small ritual', '5. this will all be sediment again'],
+  cuneiform: {
+    mantra: '\u{12000} \u{12055} \u{12097} \u00b7 \u{12097} \u{12292} \u{12157} \u00b7 \u{12157} \u{1217E} \u{12000}',
+    hero: '\u{12000}\u{12055}\u{12097} \u{12157}\u{12292} \u{12337}\u{1217E} \u{12326}\u{12000}\u{12120}',
+    aboutEpigraph: '\u{12337}\u{1217E} \u00b7 \u{12157}\u{12292} \u{12000}\u{12120}\u{1223E} \u{12047}\u{12292} \u00b7 \u{12326}\u{12000}\u{12120} \u{12261}\u{12326}'
+  }
+};
+
+// EDITABLE \u2014 confirm these claims before publishing
+const BENEFITS = [{
+  t: 'Dries in seconds',
+  s: 'High-purity isopropanol flashes off clean. No tacky residue, no waiting on the wall.',
+  icon: 'stopwatch.png'
+}, {
+  t: 'Made in small batches',
+  s: 'Ground, mixed, and bottled by hand in a toronto garage. Small batches, made with love.',
+  icon: 'heart.png'
+}, {
+  t: 'Nothing but chalk',
+  s: '75% isopropanol, 25% magnesium carbonate. No fillers, no fragrance, no rosin.',
+  icon: 'powder.png'
+}];
+function scrollToTop() {
+  const c = document.querySelector('.content');
+  if (c) c.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  });
+}
+function scrollToId(id) {
+  const e = document.getElementById(id);
+  if (e) e.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start'
+  });
+}
+function Nav({
+  cartCount,
+  onOpenCart
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    className: "rock-frame nav-wrap"
+  }, /*#__PURE__*/React.createElement("canvas", {
+    className: "slab-canvas"
+  }), /*#__PURE__*/React.createElement("nav", {
+    className: "nav"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      cursor: 'pointer'
+    },
+    onClick: scrollToTop
+  }, /*#__PURE__*/React.createElement("img", {
+    src: "baba-logo.svg",
+    alt: "baba-gah",
+    className: "nav-logo"
+  }), /*#__PURE__*/React.createElement("img", {
+    src: "babagah-red.svg",
+    alt: "baba-gah",
+    className: "nav-wordmark"
+  })), /*#__PURE__*/React.createElement("img", {
+    src: "babagah-red.svg",
+    alt: "baba-gah",
+    className: "nav-mark",
+    onClick: scrollToTop
+  }), /*#__PURE__*/React.createElement("button", {
+    className: "bag-btn",
+    onClick: onOpenCart,
+    "aria-label": "bag",
+    title: "bag"
+  }, /*#__PURE__*/React.createElement("img", {
+    src: "bag.png",
+    alt: "bag",
+    className: "bag-icon"
+  }), cartCount > 0 && /*#__PURE__*/React.createElement("span", {
+    className: "count"
+  }, cartCount))));
+}
+function CartDrawer({
+  open,
+  onClose,
+  cart,
+  updateQty
+}) {
+  const sub = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: `cart-overlay ${open ? 'open' : ''}`,
+    onClick: onClose
+  }), /*#__PURE__*/React.createElement("aside", {
+    className: `cart-drawer ${open ? 'open' : ''}`
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "cart-header"
+  }, /*#__PURE__*/React.createElement("h2", null, "your bag"), /*#__PURE__*/React.createElement("button", {
+    className: "cart-close",
+    onClick: onClose
+  }, "\xD7")), /*#__PURE__*/React.createElement("div", {
+    className: "cart-items"
+  }, cart.length === 0 && /*#__PURE__*/React.createElement("div", {
+    className: "cart-empty"
+  }, "nothing here yet."), cart.map((item, i) => /*#__PURE__*/React.createElement("div", {
+    className: "cart-item",
+    key: i
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "cart-item-thumb"
+  }, "chalk"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "cart-item-name"
+  }, PRODUCT.name), /*#__PURE__*/React.createElement("div", {
+    className: "cart-item-variant"
+  }, item.vl), /*#__PURE__*/React.createElement("div", {
+    className: "cart-item-qty"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => updateQty(i, item.qty - 1)
+  }, "\u2212"), /*#__PURE__*/React.createElement("span", null, item.qty), /*#__PURE__*/React.createElement("button", {
+    onClick: () => updateQty(i, item.qty + 1)
+  }, "+"))), /*#__PURE__*/React.createElement("div", {
+    className: "cart-item-price"
+  }, "$", item.price * item.qty)))), cart.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "cart-footer"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "cart-subtotal"
+  }, /*#__PURE__*/React.createElement("span", null, "subtotal"), /*#__PURE__*/React.createElement("span", null, "$", sub)), /*#__PURE__*/React.createElement("button", {
+    className: "checkout-btn"
+  }, "checkout \u2192"), /*#__PURE__*/React.createElement("div", {
+    className: "cart-mantra"
+  }, F.mantra))));
+}
+function BuyBar({
+  v,
+  addToCart,
+  heroRef,
+  endRef
+}) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const root = document.querySelector('.content');
+    const els = [heroRef.current, endRef && endRef.current].filter(Boolean);
+    if (!root || !els.length || !('IntersectionObserver' in window)) return;
+    const vis = new Map();
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(e => vis.set(e.target, e.isIntersecting));
+      setShow(![...vis.values()].some(Boolean)); // show only when neither CTA is visible
+    }, {
+      root,
+      threshold: 0
+    });
+    els.forEach(el => io.observe(el));
+    return () => io.disconnect();
+  }, []);
+  return /*#__PURE__*/React.createElement("div", {
+    className: `buy-bar ${show ? 'show' : ''}`
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "buy-bar-inner"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "buy-bar-name"
+  }, PRODUCT.name, " \xB7 ", v.label), /*#__PURE__*/React.createElement("span", {
+    className: "buy-bar-sp"
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "buy-bar-price"
+  }, "$", v.price), /*#__PURE__*/React.createElement("button", {
+    className: "add-btn buy-bar-add",
+    onClick: () => addToCart(v)
+  }, "add to bag")));
+}
+function StoreScreen({
+  addToCart
+}) {
+  const v = PRODUCT.variants[0];
+  const heroRef = useRef(null);
+  const endRef = useRef(null);
+  const steps = [{
+    n: '01',
+    t: 'a dime per palm',
+    s: 'Shake once. Pour a small circle into the heel of your hand.'
+  }, {
+    n: '02',
+    t: 'rub in slowly',
+    s: 'Both palms, back of the hand, between the fingers. Let the isopropanol leave.'
+  }, {
+    n: '03',
+    t: 'wait a breath',
+    s: 'Five seconds. What remains is a dry, even film.'
+  }, {
+    n: '04',
+    t: 'climb',
+    s: 'One application is most pitches. Re-chalk only when the palm starts to ask.'
+  }];
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    className: "hero"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "cut-panel hero-visual",
+    "data-rock": "cut"
+  }, /*#__PURE__*/React.createElement(BottleView, {
+    autoRotate: true,
+    interactive: false
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "recess-panel hero-text hero-buy",
+    "data-rock": "recess"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "eyebrow"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "stud stud-green"
+  }), " ", PRODUCT.stock), /*#__PURE__*/React.createElement("h1", null, PRODUCT.name, "."), /*#__PURE__*/React.createElement("div", {
+    className: "hero-lede"
+  }, PRODUCT.description), /*#__PURE__*/React.createElement("div", {
+    className: "price-row",
+    ref: heroRef
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "buy-price"
+  }, "$", v.price), /*#__PURE__*/React.createElement("span", {
+    className: "size-fact"
+  }, v.label, " \xB7 ", v.sub)), /*#__PURE__*/React.createElement("button", {
+    className: "add-btn",
+    onClick: () => addToCart(v)
+  }, "add to bag $", v.price))), /*#__PURE__*/React.createElement("div", {
+    className: "section"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "benefits"
+  }, BENEFITS.map((b, i) => /*#__PURE__*/React.createElement("div", {
+    className: "benefit",
+    key: i
+  }, b.icon && /*#__PURE__*/React.createElement("img", {
+    src: b.icon,
+    alt: "",
+    className: "benefit-icon"
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "benefit-title"
+  }, b.t), /*#__PURE__*/React.createElement("div", {
+    className: "benefit-sub"
+  }, b.s))))), /*#__PURE__*/React.createElement("div", {
+    className: "section"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "recess-panel",
+    "data-rock": "recess"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "prose"
+  }, /*#__PURE__*/React.createElement("p", null, PRODUCT.longDescription[0]), /*#__PURE__*/React.createElement("p", null, PRODUCT.longDescription[1])))), /*#__PURE__*/React.createElement("div", {
+    className: "section"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "recess-panel",
+    "data-rock": "recess"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "section-label"
+  }, "how to use it"), /*#__PURE__*/React.createElement("div", {
+    className: "steps"
+  }, steps.map(st => /*#__PURE__*/React.createElement("div", {
+    className: "step",
+    key: st.n
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "step-num"
+  }, st.n), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    className: "step-title"
+  }, st.t), /*#__PURE__*/React.createElement("div", {
+    className: "step-desc"
+  }, st.s))))))), /*#__PURE__*/React.createElement("div", {
+    className: "section",
+    id: "story"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "buy-grid",
+    style: {
+      marginBottom: 24
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "cut-panel",
+    "data-rock": "cut",
+    style: {
+      aspectRatio: '3/4'
+    }
+  }, /*#__PURE__*/React.createElement(PanelModel, {
+    mount: "__mountChalk"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "recess-panel hero-text",
+    "data-rock": "recess"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "about-title"
+  }, "the story"), /*#__PURE__*/React.createElement("p", {
+    className: "about-text"
+  }, F.about_1), /*#__PURE__*/React.createElement("p", {
+    className: "about-text"
+  }, F.about_2), /*#__PURE__*/React.createElement("p", {
+    className: "about-text"
+  }, F.about_3))), /*#__PURE__*/React.createElement("div", {
+    className: "recess-panel",
+    "data-rock": "recess",
+    style: {
+      padding: '16px 24px',
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "about-epigraph cf",
+    style: {
+      marginBottom: 0
+    }
+  }, F.cuneiform.aboutEpigraph)), /*#__PURE__*/React.createElement("div", {
+    className: "recess-panel",
+    "data-rock": "recess"
+  }, /*#__PURE__*/React.createElement("ul", {
+    className: "manifesto"
+  }, F.manifesto.map((m, i) => /*#__PURE__*/React.createElement("li", {
+    key: i
+  }, m))), /*#__PURE__*/React.createElement("div", {
+    className: "closing-mantra"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "cf"
+  }, F.cuneiform.mantra), /*#__PURE__*/React.createElement("em", null, F.mantra)))), /*#__PURE__*/React.createElement("div", {
+    className: "section"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "recess-panel",
+    "data-rock": "recess"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "closing-cta"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "section-label",
+    style: {
+      marginBottom: 14
+    }
+  }, "one thing, made well"), /*#__PURE__*/React.createElement("div", {
+    className: "buy-price"
+  }, "$", v.price), /*#__PURE__*/React.createElement("span", {
+    className: "size-fact"
+  }, v.label, " \xB7 ", PRODUCT.stock), /*#__PURE__*/React.createElement("button", {
+    className: "add-btn",
+    ref: endRef,
+    onClick: () => addToCart(v)
+  }, "add to bag $", v.price)))), /*#__PURE__*/React.createElement(BuyBar, {
+    v: v,
+    addToCart: addToCart,
+    heroRef: heroRef,
+    endRef: endRef
+  }));
+}
+function App() {
+  const [cart, setCart] = useState([]);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const cartCount = cart.reduce((s, i) => s + i.qty, 0);
+  const addToCart = useCallback(v => {
+    setCart(p => {
+      const i = p.findIndex(x => x.vid === v.id);
+      if (i >= 0) {
+        const n = [...p];
+        n[i] = {
+          ...n[i],
+          qty: n[i].qty + 1
+        };
+        return n;
+      }
+      return [...p, {
+        vid: v.id,
+        vl: v.label,
+        price: v.price,
+        qty: 1
+      }];
+    });
+    setDrawerOpen(true);
+  }, []);
+  const updateQty = useCallback((i, q) => {
+    setCart(p => {
+      if (q <= 0) return p.filter((_, j) => j !== i);
+      const n = [...p];
+      n[i] = {
+        ...n[i],
+        qty: q
+      };
+      return n;
+    });
+  }, []);
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Nav, {
+    cartCount: cartCount,
+    onOpenCart: () => setDrawerOpen(true)
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "content"
+  }, /*#__PURE__*/React.createElement(StoreScreen, {
+    addToCart: addToCart
+  })), /*#__PURE__*/React.createElement(CartDrawer, {
+    open: drawerOpen,
+    onClose: () => setDrawerOpen(false),
+    cart: cart,
+    updateQty: updateQty
+  }));
+}
+ReactDOM.createRoot(document.getElementById('app-root')).render(/*#__PURE__*/React.createElement(App, null));
+
+</script>
+</body>
+</html>
