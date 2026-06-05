@@ -1427,12 +1427,14 @@ window.dispatchEvent(new Event('viewers-ready'));
       if (!s) return;
       const g = s.gl;
       const frame = nc.parentElement;
-      const cw = frame.offsetWidth;
-      const ch = frame.offsetHeight;
+      const dpr = window.devicePixelRatio || 1;             // render at full native screen resolution
+      const cssW = frame.offsetWidth, cssH = frame.offsetHeight;
+      const cw = Math.round(cssW * dpr);
+      const ch = Math.round(cssH * dpr);
 
       // Collect cut panels inside this frame
       const frameRect = frame.getBoundingClientRect();
-      const sx = cw/frame.offsetWidth, sy = ch/frame.offsetHeight;
+      const sx = cw/cssW, sy = ch/cssH;
       const cuts = [];
       frame.querySelectorAll('[data-slab-cut]').forEach(el => {
         if(cuts.length>=16) return;
