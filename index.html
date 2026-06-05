@@ -1677,7 +1677,8 @@ window.dispatchEvent(new Event('viewers-ready'));
     const docW = contentEl.clientWidth, docH = inner ? inner.offsetHeight : contentEl.scrollHeight;
     if (docW < 2 || docH < 2) return false;
     const OVERSCAN = 8;                          // CSS px each side — hides the shader's edge fade
-    const TOP_OVER = 400, BOTTOM_OVER = 300;    // extra rock above/below the content (nav + mobile overscroll)
+    const TOP_OVER = 400, BOTTOM_OVER = 0;    // extra rock above the content (nav). No bottom overscan:
+    // the absolute #rockScroll canvas would otherwise add that as scrollable blank space.
     const totalW = docW + 2*OVERSCAN, totalH = docH + TOP_OVER + BOTTOM_OVER;
     let dpr = Math.min(window.devicePixelRatio || 1, 2);
     dpr = Math.min(dpr, tall.MAX/totalW, tall.MAX/totalH, 16384/totalH);   // clamp to texture + memory budget
