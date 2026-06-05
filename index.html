@@ -671,9 +671,9 @@ function createBottleViewer(canvas, opts = {}) {
     || (navigator.maxTouchPoints > 1 && !window.matchMedia('(pointer:fine)').matches);
   const labelFallback = renderer.capabilities.precision !== 'highp' || isMobile;
   const decalMatFlat = new THREE.MeshStandardMaterial({
-    transparent: true, depthTest: true, depthWrite: false,
-    polygonOffset: true, polygonOffsetFactor: -6, roughness: 0.7, metalness: 0,
-    envMapIntensity: 0.15, side: THREE.FrontSide,    // keep the black ink crisp, not env-greyed
+    transparent: true, depthTest: true, depthWrite: false, roughness: 0.7, metalness: 0,
+    envMapIntensity: 0.15, side: THREE.FrontSide,    // crisp ink; no polygonOffset so the
+    // bottle body occludes the band when it rotates to the back (front-only look)
   });
 
   let labelTexture = null, labelAspect = 612 / 174, decalMesh = null;
@@ -759,16 +759,21 @@ function createBottleViewer(canvas, opts = {}) {
     const dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a)), negDir = dir.clone().negate();
     const cx = (bodyBox.min.x + bodyBox.max.x) / 2, cz = (bodyBox.min.z + bodyBox.max.z) / 2;
     const yc = THREE.MathUtils.lerp(bodyBox.min.y + 0.02, bodyBox.max.y - 0.02, (label.y ?? 46) / 100);
-    const w = (label.size ?? 70) / 100, h = w / labelAspect;
+    let w = (label.size ?? 70) / 100, h = w / labelAspect;
     const Rfallback = Math.max(bodyBox.max.x - bodyBox.min.x, bodyBox.max.z - bodyBox.min.z) / 2;
     // True surface radius at a given height (one CPU raycast — robust, not the GPU bug).
     const radiusAt = (yy) => {
       raycaster.set(new THREE.Vector3(cx + dir.x * 10, yy, cz + dir.z * 10), negDir);
       const hh = raycaster.intersectObject(bodyMesh, true);
-      return (hh.length ? (hh[0].point.x - cx) * dir.x + (hh[0].point.z - cz) * dir.z : Rfallback) + 0.012;
+      return (hh.length ? (hh[0].point.x - cx) * dir.x + (hh[0].point.z - cz) * dir.z : Rfallback) + 0.004;
     };
     const Rbot = radiusAt(yc - h / 2), Rtop = radiusAt(yc + h / 2), Rmid = (Rbot + Rtop) / 2;
-    const segs = 32, arc = Math.min(w / Math.max(Rmid, 1e-3), Math.PI * 0.9);
+    // Cap the wrap to the visible front; scale the label (no distortion) so a big
+    // label can't smear around the sides the way the front-clipped decal hides.
+    const maxArc = 2.6;
+    let arc = w / Math.max(Rmid, 1e-3);
+    if (arc > maxArc) { const k = maxArc / arc; w *= k; h *= k; arc = maxArc; }
+    const segs = 32;
     const pos = [], uv = [], nor = [], idx = [];
     for (let i = 0; i <= segs; i++) {
       const t = i / segs, th = a + (t - 0.5) * arc;
@@ -779,7 +784,7 @@ function createBottleViewer(canvas, opts = {}) {
         nor.push(c, 0, s); uv.push(1 - t, j);
       }
     }
-    for (let i = 0; i < segs; i++) { const o = i * 2; idx.push(o, o + 2, o + 1, o + 1, o + 2, o + 3); }
+    for (let i = 0; i < segs; i++) { const o = i * 2; idx.push(o, o + 1, o + 2, o + 1, o + 3, o + 2); }
     const g = new THREE.BufferGeometry();
     g.setIndex(idx);
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -787,8 +792,7 @@ function createBottleViewer(canvas, opts = {}) {
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     decalMatFlat.opacity = (label.opacity ?? 100) / 100;
     decalMatFlat.roughness = (label.finish ?? 45) / 100;
-    decalMatFlat.side = THREE.DoubleSide;
-    const m = new THREE.Mesh(g, decalMatFlat);
+    const m = new THREE.Mesh(g, decalMatFlat);   // FrontSide → band culls where it faces away
     m.renderOrder = 2;
     m.updateMatrix();
     spinGroup.updateWorldMatrix(true, false);
