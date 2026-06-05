@@ -1540,8 +1540,9 @@ window.dispatchEvent(new Event('viewers-ready'));
   setTimeout(hookDirtyListeners, 200);
 
   function resize(){
-    const w = window.innerWidth;
-    const h = window.innerHeight;
+    const dpr = window.devicePixelRatio || 1;   // render at full native screen resolution
+    const w = Math.round(window.innerWidth * dpr);
+    const h = Math.round(window.innerHeight * dpr);
     if(canvas.width!==w||canvas.height!==h){
       canvas.width=w; canvas.height=h;
       rockDirty = true;
