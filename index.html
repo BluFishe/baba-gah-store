@@ -15,6 +15,10 @@ body { background: #0c0c0f; font-family: Arial, Helvetica, sans-serif; color: #f
 #skyCanvas { position: fixed; top: -1px; left: -1px; width: calc(100vw + 2px); height: calc(100vh + 2px); z-index: 0; }
 #rockCanvas { position: fixed; top: -1px; left: -1px; width: calc(100vw + 2px); height: calc(100vh + 2px); z-index: 2; }
 #model-layer { position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+/* Desktop native-scroll rock: pre-rendered full-height canvas that scrolls with .content */
+#rockScroll { position: absolute; top: 0; left: 0; width: 100%; height: 0; z-index: -1; pointer-events: none; display: block; }
+body.rock-native #rockCanvas { display: none; }
+body:not(.rock-native) #rockScroll { display: none; }
 
 #app-root { position: fixed; inset: 0; z-index: 3; display: flex; flex-direction: column; }
 
@@ -1524,47 +1528,150 @@ window.dispatchEvent(new Event('viewers-ready'));
     });
   }
 
-  // ── Dirty-flag rendering: only re-render rock when state changes ──
+  // ── Two render modes ──────────────────────────────────────────────────────
+  //  fixed  (mobile):  the full-screen #rockCanvas re-rendered per scroll (as before).
+  //  native (desktop): the whole document rendered ONCE into a tall #rockScroll canvas
+  //                    that lives inside .content and scrolls natively with the page.
   let rockDirty = true;
-
+  let lastBuiltDocH = -1;
   function markDirty() { rockDirty = true; }
 
-  // Listen for scroll, resize, and mutation
+  const DESKTOP_MIN = 760;
+  let mode = null;                 // 'native' | 'fixed'
+  let tall = null;                 // { g, hP, sP, vao, t0, t1, fbo, cw, ch, MAX }
+  function desiredMode(){ return window.innerWidth >= DESKTOP_MIN ? 'native' : 'fixed'; }
+  function applyMode(){
+    const want = desiredMode();
+    if (want === mode) return;
+    mode = want;
+    document.body.classList.toggle('rock-native', want === 'native');
+    rockDirty = true;
+  }
+
+  function initTall(c){
+    const g = c.getContext('webgl2', { antialias:false, premultipliedAlpha:false, alpha:true });
+    if (!g) return null;
+    g.getExtension('EXT_color_buffer_float');
+    const sc=(s,t)=>{const sh=g.createShader(t);g.shaderSource(sh,s);g.compileShader(sh);if(!g.getShaderParameter(sh,g.COMPILE_STATUS))console.error('rockScroll',g.getShaderInfoLog(sh));return sh;};
+    const lk=(v,f)=>{const p=g.createProgram();g.attachShader(p,v);g.attachShader(p,f);g.linkProgram(p);return p;};
+    const v=sc(VERT,g.VERTEX_SHADER);
+    return { g, hP:lk(v,sc(HF,g.FRAGMENT_SHADER)), sP:lk(v,sc(SF,g.FRAGMENT_SHADER)), vao:g.createVertexArray(), t0:null,t1:null,fbo:null, cw:0,ch:0, MAX:g.getParameter(g.MAX_TEXTURE_SIZE) };
+  }
+
+  // Panels in DOCUMENT space (so they bake at absolute Y and scroll with the content).
+  function collectPanelsDoc(W,H,docW,docH,contentEl){
+    const panels=[]; const cr=contentEl.getBoundingClientRect(); const st=contentEl.scrollTop;
+    const sx=W/docW, sy=H/docH;
+    document.querySelectorAll('[data-rock]').forEach(el=>{
+      if(panels.length>=16) return;
+      const r=el.getBoundingClientRect();
+      const x=(r.left-cr.left)*sx, y=((r.top-cr.top)+st)*sy, w=r.width*sx, h=r.height*sy;
+      const pad=8*sx;
+      panels.push({x:x-pad,y:y-pad,w:w+pad*2,h:h+pad*2,type:el.dataset.rock});
+    });
+    return panels;
+  }
+
+  // Returns: true = built · false = not ready (stay dirty) · 'fallback' = too big, use fixed.
+  function buildTall(){
+    const c = document.getElementById('rockScroll');
+    const contentEl = document.querySelector('.content');
+    if (!c || !contentEl) return false;
+    if (!tall) tall = initTall(c);
+    if (!tall) return 'fallback';
+    const g = tall.g;
+    const docW = contentEl.clientWidth, docH = contentEl.scrollHeight;
+    if (docW < 2 || docH < 2) return false;
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    dpr = Math.min(dpr, tall.MAX/docW, tall.MAX/docH, 8192/docH);   // clamp to texture + memory budget
+    if (dpr < 0.25) return 'fallback';
+    const W = Math.max(2, Math.round(docW*dpr)), H = Math.max(2, Math.round(docH*dpr));
+    c.width=W; c.height=H; c.style.height=docH+'px';
+    if (tall.cw!==W || tall.ch!==H) {
+      if (tall.t0){ g.deleteTexture(tall.t0); g.deleteTexture(tall.t1); g.deleteFramebuffer(tall.fbo); }
+      const mk=()=>{const t=g.createTexture();g.bindTexture(g.TEXTURE_2D,t);g.texImage2D(g.TEXTURE_2D,0,g.RGBA16F,W,H,0,g.RGBA,g.HALF_FLOAT,null);g.texParameteri(g.TEXTURE_2D,g.TEXTURE_MIN_FILTER,g.NEAREST);g.texParameteri(g.TEXTURE_2D,g.TEXTURE_MAG_FILTER,g.NEAREST);g.texParameteri(g.TEXTURE_2D,g.TEXTURE_WRAP_S,g.CLAMP_TO_EDGE);g.texParameteri(g.TEXTURE_2D,g.TEXTURE_WRAP_T,g.CLAMP_TO_EDGE);return t;};
+      tall.t0=mk(); tall.t1=mk();
+      tall.fbo=g.createFramebuffer(); g.bindFramebuffer(g.FRAMEBUFFER,tall.fbo);
+      g.framebufferTexture2D(g.FRAMEBUFFER,g.COLOR_ATTACHMENT0,g.TEXTURE_2D,tall.t0,0);
+      g.framebufferTexture2D(g.FRAMEBUFFER,g.COLOR_ATTACHMENT1,g.TEXTURE_2D,tall.t1,0);
+      g.bindFramebuffer(g.FRAMEBUFFER,null);
+      tall.cw=W; tall.ch=H;
+    }
+    const panels=collectPanelsDoc(W,H,docW,docH,contentEl);
+    const U=(p,n,t,v)=>{const l=g.getUniformLocation(p,n);if(!l)return;if(t==='1i')g.uniform1i(l,v);else if(t==='1f')g.uniform1f(l,v);else if(t==='2f')g.uniform2f(l,v[0],v[1]);else if(t==='3f')g.uniform3f(l,v[0],v[1],v[2]);else if(t==='4f')g.uniform4f(l,v[0],v[1],v[2],v[3]);};
+    const C=ROCK_CFG.primary, M=C.mat, Lt=C.light;
+    g.bindVertexArray(tall.vao);
+    // Pass 1: heightmap (document space, uScrollY=0)
+    g.bindFramebuffer(g.FRAMEBUFFER,tall.fbo);
+    g.drawBuffers([g.COLOR_ATTACHMENT0,g.COLOR_ATTACHMENT1]);
+    g.viewport(0,0,W,H); g.useProgram(tall.hP);
+    U(tall.hP,'uRes','2f',[W,H]);
+    U(tall.hP,'uSeed','1f',C.seed);U(tall.hP,'uScale','1f',C.scale);U(tall.hP,'uHeight','1f',C.height);U(tall.hP,'uRough','1f',C.rough);
+    U(tall.hP,'uOctaves','1i',C.octaves);U(tall.hP,'uLac','1f',C.lac);U(tall.hP,'uGain','1f',C.gain);U(tall.hP,'uWarp','1f',C.warp);
+    U(tall.hP,'uStrata','1f',C.strata);U(tall.hP,'uVeins','1f',C.veins);U(tall.hP,'uCracks','1f',C.cracks);U(tall.hP,'uPitting','1f',C.pitting);U(tall.hP,'uDrift','1f',C.drift);
+    U(tall.hP,'uScrollY','1f',0);
+    U(tall.hP,'uPanelCount','1i',panels.length);
+    for(let i=0;i<16;i++){ if(i<panels.length){const p=panels[i];U(tall.hP,`uPanels[${i}]`,'4f',[p.x,p.y,p.w,p.h]);U(tall.hP,`uPanelTypes[${i}]`,'1i',p.type==='cut'?0:1);} else {U(tall.hP,`uPanels[${i}]`,'4f',[0,0,0,0]);U(tall.hP,`uPanelTypes[${i}]`,'1i',0);} }
+    U(tall.hP,'uEdgeAmt','1f',C.edgeAmt);U(tall.hP,'uEdgeFreq','1f',C.edgeFreq);U(tall.hP,'uEdgeDetail','1i',C.edgeDetail);U(tall.hP,'uLipWidth','1f',C.lipWidth);
+    g.drawArrays(g.TRIANGLE_STRIP,0,4);
+    // Pass 2: shade → the #rockScroll canvas
+    g.bindFramebuffer(g.FRAMEBUFFER,null);
+    g.viewport(0,0,W,H); g.useProgram(tall.sP);
+    U(tall.sP,'uRes','2f',[W,H]);U(tall.sP,'uGeoTex','1i',0);U(tall.sP,'uDetailTex','1i',1);
+    U(tall.sP,'uCol0','3f',M.col0);U(tall.sP,'uCol1','3f',M.col1);U(tall.sP,'uCol2','3f',M.col2);U(tall.sP,'uCol3','3f',M.col3);
+    U(tall.sP,'uWeights','4f',M.weights);U(tall.sP,'uMatStrata','1f',M.strata);U(tall.sP,'uMatVeins','1f',M.veins);U(tall.sP,'uMatPitting','1f',M.pitting);U(tall.sP,'uMatSpec','1f',M.spec);U(tall.sP,'uMatRough','1f',M.rough);
+    const aR=Lt.angle*Math.PI/180,eR=Lt.elev*Math.PI/180,cE=Math.cos(eR);
+    const lx=cE*Math.cos(aR),ly=-Math.sin(eR),lz=cE*Math.sin(aR),ll=Math.sqrt(lx*lx+ly*ly+lz*lz);
+    const fx=-lx/ll*.3,fy=-.2,fz=lz/ll*.3+.5,fl=Math.sqrt(fx*fx+fy*fy+fz*fz);
+    U(tall.sP,'uLightDir','3f',[lx/ll,ly/ll,lz/ll]);U(tall.sP,'uFillDir','3f',[fx/fl,fy/fl,fz/fl]);
+    U(tall.sP,'uBrightness','1f',Lt.brightness);U(tall.sP,'uAmbient','1f',Lt.ambient);U(tall.sP,'uLightColor','3f',Lt.color);U(tall.sP,'uNormalStr','1f',Lt.normalStr);
+    g.activeTexture(g.TEXTURE0);g.bindTexture(g.TEXTURE_2D,tall.t0);
+    g.activeTexture(g.TEXTURE1);g.bindTexture(g.TEXTURE_2D,tall.t1);
+    g.clearColor(0,0,0,0);g.clear(g.COLOR_BUFFER_BIT);
+    g.drawArrays(g.TRIANGLE_STRIP,0,4);
+    g.bindVertexArray(null);
+    lastBuiltDocH = docH;
+    return true;
+  }
+
+  // Listen for resize, scroll (fixed mode only), and content-height mutations.
   function hookDirtyListeners() {
     const contentEl = document.querySelector('.content');
-    if (contentEl) contentEl.addEventListener('scroll', markDirty, { passive: true });
+    if (contentEl) contentEl.addEventListener('scroll', () => { if (mode !== 'native') markDirty(); }, { passive: true });
     window.addEventListener('resize', markDirty);
-    // Watch for DOM changes (screen switches, accordions)
-    const obs = new MutationObserver(markDirty);
+    const obs = new MutationObserver(() => {
+      if (mode === 'native') { const c = document.querySelector('.content'); if (c && c.scrollHeight !== lastBuiltDocH) markDirty(); }
+      else markDirty();
+    });
     obs.observe(document.getElementById('app-root'), { childList: true, subtree: true });
   }
-  // Defer until React mounts
   setTimeout(hookDirtyListeners, 200);
 
   function resize(){
-    const dpr = window.devicePixelRatio || 1;   // render at full native screen resolution
+    const dpr = window.devicePixelRatio || 1;   // fixed canvas at full native screen resolution
     const w = Math.round(window.innerWidth * dpr);
     const h = Math.round(window.innerHeight * dpr);
-    if(canvas.width!==w||canvas.height!==h){
-      canvas.width=w; canvas.height=h;
-      rockDirty = true;
-    }
+    if(canvas.width!==w||canvas.height!==h){ canvas.width=w; canvas.height=h; rockDirty = true; }
   }
 
   function loop(){
-    resize();
-    if (rockDirty) {
-      render();
-      renderSlabs();
-      rockDirty = false;
+    applyMode();
+    if (mode === 'native') {
+      if (rockDirty) {
+        const r = buildTall();
+        renderSlabs();
+        if (r === 'fallback') { document.body.classList.remove('rock-native'); mode = 'fixed'; rockDirty = true; }
+        else if (r === true) rockDirty = false;   // false = not ready → stay dirty, retry next frame
+      }
+    } else {
+      resize();
+      if (rockDirty) { render(); renderSlabs(); rockDirty = false; }
     }
     requestAnimationFrame(loop);
   }
-
   requestAnimationFrame(loop);
 
-  // Re-render after React mounts the data-rock panels (the first render happens
-  // before mount, so the cutouts would otherwise stay empty until first scroll).
+  // Re-bake after React mounts the panels / fonts load (layout settles).
   [80, 250, 500, 900, 1500, 2500].forEach(t => setTimeout(markDirty, t));
   window.addEventListener('load', markDirty);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(markDirty).catch(()=>{});
@@ -2106,7 +2213,10 @@ function App() {
     onOpenCart: () => setDrawerOpen(true)
   }), /*#__PURE__*/React.createElement("div", {
     className: "content"
-  }, /*#__PURE__*/React.createElement(StoreScreen, {
+  }, /*#__PURE__*/React.createElement("canvas", {
+    id: "rockScroll",
+    "aria-hidden": "true"
+  }), /*#__PURE__*/React.createElement(StoreScreen, {
     addToCart: addToCart
   })), /*#__PURE__*/React.createElement(CartDrawer, {
     open: drawerOpen,
