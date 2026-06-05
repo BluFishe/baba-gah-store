@@ -654,16 +654,24 @@ function createBottleViewer(canvas, opts = {}) {
   });
   decalMat.onBeforeCompile = (shader) => {
     shader.uniforms.uLabelDir = labelDirU;
-    shader.vertexShader = 'varying vec3 vLabelN;\n' + shader.vertexShader.replace(
+    shader.vertexShader = 'varying highp vec3 vLabelN;\n' + shader.vertexShader.replace(
       '#include <beginnormal_vertex>',
       '#include <beginnormal_vertex>\n  vLabelN = normalize(mat3(modelMatrix) * objectNormal);'
     );
-    shader.fragmentShader = 'uniform vec3 uLabelDir;\nvarying vec3 vLabelN;\n' + shader.fragmentShader.replace(
+    shader.fragmentShader = 'uniform highp vec3 uLabelDir;\nvarying highp vec3 vLabelN;\n' + shader.fragmentShader.replace(
       '#include <clipping_planes_fragment>',
       '#include <clipping_planes_fragment>\n  if (dot(normalize(vLabelN), normalize(uLabelDir)) < 0.25) discard;'
     );
   };
   decalMat.customProgramCacheKey = () => 'label-normal-clip';
+
+  // Fallback for GPUs without fragment highp (the custom normal-clip shader is
+  // unreliable there → garbled label). Use a plain front-facing plane instead.
+  const labelFallback = renderer.capabilities.precision !== 'highp';
+  const decalMatFlat = new THREE.MeshStandardMaterial({
+    transparent: true, depthTest: true, depthWrite: false,
+    polygonOffset: true, polygonOffsetFactor: -6, roughness: 0.45, metalness: 0, side: THREE.FrontSide,
+  });
 
   let labelTexture = null, labelAspect = 612 / 174, decalMesh = null;
   let label = cfg.label || {};
@@ -718,6 +726,26 @@ function createBottleViewer(canvas, opts = {}) {
 
     const w = (label.size ?? 70) / 100;
     const h = w / labelAspect;
+
+    // Low-end GPUs (no fragment highp): the projected decal + normal-clip shader
+    // renders garbled. Drop to a plain front-facing plane tangent to the bottle.
+    if (labelFallback) {
+      decalMatFlat.opacity = (label.opacity ?? 100) / 100;
+      decalMatFlat.roughness = (label.finish ?? 45) / 100;
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), decalMatFlat);
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
+      m.rotateZ((label.rot || 0) * Math.PI / 180);
+      m.position.copy(hit.point).addScaledVector(n, 0.012);
+      m.renderOrder = 2;
+      m.updateMatrix();
+      spinGroup.updateWorldMatrix(true, false);
+      m.applyMatrix4(spinGroup.matrixWorld.clone().invert());
+      spinGroup.add(m);
+      decalMesh = m;
+      decalLocalDir = null;
+      return;
+    }
+
     const surfR = (hit.point.x - cx) * dir.x + (hit.point.z - cz) * dir.z;
     const depth = Math.min(surfR * 1.7, Math.max(0.25, w * 0.7));
     const geo = new DecalGeometry(bodyMesh, hit.point, dummy.rotation, new THREE.Vector3(w, h, depth));
@@ -739,6 +767,7 @@ function createBottleViewer(canvas, opts = {}) {
       if (labelTexture) labelTexture.dispose();
       labelTexture = tex; labelAspect = aspect;
       decalMat.map = labelTexture; decalMat.needsUpdate = true;
+      decalMatFlat.map = labelTexture; decalMatFlat.needsUpdate = true;
       placeDecal();
     });
   }
@@ -1560,9 +1589,9 @@ window.dispatchEvent(new Event('viewers-ready'));
   }
 
   // Panels in DOCUMENT space (so they bake at absolute Y and scroll with the content).
-  function collectPanelsDoc(W,H,docW,docH,contentEl,OVERSCAN,TOP_OVER){
+  function collectPanelsDoc(W,H,docW,docH,contentEl,OVERSCAN,TOP_OVER,totalH){
     const panels=[]; const cr=contentEl.getBoundingClientRect(); const st=contentEl.scrollTop;
-    const sx=W/(docW+2*OVERSCAN), sy=H/(docH+TOP_OVER);
+    const sx=W/(docW+2*OVERSCAN), sy=H/totalH;
     document.querySelectorAll('[data-rock]').forEach(el=>{
       if(panels.length>=16) return;
       const r=el.getBoundingClientRect();
@@ -1581,11 +1610,12 @@ window.dispatchEvent(new Event('viewers-ready'));
     if (!tall) tall = initTall(c);
     if (!tall) return 'fallback';
     const g = tall.g;
-    const docW = contentEl.clientWidth, docH = contentEl.scrollHeight;
+    const inner = c.nextElementSibling;          // the page content (excludes this canvas) → stable height
+    const docW = contentEl.clientWidth, docH = inner ? inner.offsetHeight : contentEl.scrollHeight;
     if (docW < 2 || docH < 2) return false;
     const OVERSCAN = 8;                          // CSS px each side — hides the shader's edge fade
-    const TOP_OVER = 400;                        // extra rock above the content top (behind nav / mobile overscroll)
-    const totalW = docW + 2*OVERSCAN, totalH = docH + TOP_OVER;
+    const TOP_OVER = 400, BOTTOM_OVER = 300;    // extra rock above/below the content (nav + mobile overscroll)
+    const totalW = docW + 2*OVERSCAN, totalH = docH + TOP_OVER + BOTTOM_OVER;
     let dpr = Math.min(window.devicePixelRatio || 1, 2);
     dpr = Math.min(dpr, tall.MAX/totalW, tall.MAX/totalH, 16384/totalH);   // clamp to texture + memory budget
     if (dpr < 0.25) return 'fallback';
@@ -1605,7 +1635,7 @@ window.dispatchEvent(new Event('viewers-ready'));
       g.bindFramebuffer(g.FRAMEBUFFER,null);
       tall.cw=W; tall.ch=H;
     }
-    const panels=collectPanelsDoc(W,H,docW,docH,contentEl,OVERSCAN,TOP_OVER);
+    const panels=collectPanelsDoc(W,H,docW,docH,contentEl,OVERSCAN,TOP_OVER,totalH);
     const U=(p,n,t,v)=>{const l=g.getUniformLocation(p,n);if(!l)return;if(t==='1i')g.uniform1i(l,v);else if(t==='1f')g.uniform1f(l,v);else if(t==='2f')g.uniform2f(l,v[0],v[1]);else if(t==='3f')g.uniform3f(l,v[0],v[1],v[2]);else if(t==='4f')g.uniform4f(l,v[0],v[1],v[2],v[3]);};
     const C=ROCK_CFG.primary, M=C.mat, Lt=C.light;
     g.bindVertexArray(tall.vao);
@@ -1648,7 +1678,7 @@ window.dispatchEvent(new Event('viewers-ready'));
     if (contentEl) contentEl.addEventListener('scroll', () => { if (mode !== 'native') markDirty(); }, { passive: true });
     window.addEventListener('resize', markDirty);
     const obs = new MutationObserver(() => {
-      if (mode === 'native') { const c = document.querySelector('.content'); if (c && c.scrollHeight !== lastBuiltDocH) markDirty(); }
+      if (mode === 'native') { const cv = document.getElementById('rockScroll'); const inn = cv && cv.nextElementSibling; if (inn && inn.offsetHeight !== lastBuiltDocH) markDirty(); }
       else markDirty();
     });
     obs.observe(document.getElementById('app-root'), { childList: true, subtree: true });
