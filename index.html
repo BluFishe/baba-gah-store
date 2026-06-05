@@ -966,10 +966,11 @@ function createWordmarkViewer(canvas, opts = {}) {
   const scene = new THREE.Scene();
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  renderer.toneMappingExposure = 1.0;
   const camera = new THREE.PerspectiveCamera(26, 4, 1, 4000);
-  const key = new THREE.DirectionalLight(0xfff4e6, 1.35); key.position.set(3, 5, 6); scene.add(key);
-  const rim = new THREE.DirectionalLight(0xffd0d8, 0.5); rim.position.set(-4, 2, 3); scene.add(rim);
-  scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+  // Match the idol viewer's lighting (the orbiting ring uses the same wordmark).
+  const key = new THREE.DirectionalLight(0xfff4e6, 1.1); key.position.set(4, 6, 5); scene.add(key);
+  const rim = new THREE.DirectionalLight(0xcfe0ff, 0.45); rim.position.set(-5, 3, -4); scene.add(rim);
 
   let mark = null, mw = 1, mh = 1;
   try {
@@ -1011,7 +1012,7 @@ function createWordmarkViewer(canvas, opts = {}) {
     raf = requestAnimationFrame(animate);
     if (!canvas.clientWidth) return;                   // skip while hidden
     const t = clock.getElapsedTime();
-    if (mark) { mark.rotation.y = 0.45 * Math.sin(t * 1.0); mark.rotation.x = 0.06 * Math.sin(t * 0.7); }
+    if (mark) mark.rotation.y = 0.18 * Math.sin(t * 0.9);   // slight oscillation
     renderer.render(scene, camera);
   }
   animate();
