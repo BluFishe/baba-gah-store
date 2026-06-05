@@ -355,7 +355,8 @@ body:not(.rock-native) #rockScroll { display: none; }
 .buy-bar.show { transform: translateY(0); opacity: 1; pointer-events: auto; }
 .buy-bar-inner { display: flex; align-items: center; gap: 12px; padding: 0 20px; }
 .buy-bar-name { font-family: var(--display); font-size: 15px; color: var(--stone-text); white-space: nowrap; }
-.buy-bar-price { font-family: var(--display); font-size: 17px; color: var(--gold); }
+.buy-bar-name::first-letter { text-transform: uppercase; }
+.buy-bar-price { font-family: var(--display); font-size: 17px; color: #fff; }
 .buy-bar-sp { flex: 1; }
 .buy-bar-add { width: auto; flex: 0 0 auto; padding: 11px 26px; }
 
