@@ -589,13 +589,9 @@ function createBottleViewer(canvas, opts = {}) {
   controls.enablePan = false;
   controls.enabled = interactive;
   controls.autoRotate = false;
-  // Mobile / no-highp GPUs garble the clip shader, so the label uses CPU-pruned
-  // decal geometry. On those devices we also render a STATIC, camera-facing product
-  // shot (no time-based spin) so the bottle looks identical on every phone.
-  const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')
-    || (navigator.maxTouchPoints > 1 && !window.matchMedia('(pointer:fine)').matches);
-  const labelFallback = renderer.capabilities.precision !== 'highp' || isMobile;
-  const spinning = !!opts.autoRotate;   // desktop spins on a tilted axis; mobile spins upright (set below)
+  // The label is baked into the body's UV texture (device-independent), so the whole
+  // bottle just spins as a normal textured mesh — same on every device.
+  const spinning = !!opts.autoRotate;
 
   const key = new THREE.DirectionalLight(0xfff2dd, cfg.scene?.keyLight ?? 1.2);
   key.position.set(4, 6, 5); scene.add(key);
@@ -636,8 +632,7 @@ function createBottleViewer(canvas, opts = {}) {
   tiltGroup.add(spinGroup);
   spinGroup.add(obj);
   scene.add(tiltGroup);
-  if (spinning && !labelFallback) tiltGroup.rotation.z = THREE.MathUtils.degToRad(20);   // mobile stays upright
-  let decalLocalDir = null, labelBaseAngle = 0, spinPhase = 0;
+  if (spinning) tiltGroup.rotation.z = THREE.MathUtils.degToRad(20);   // tilted spin axis
 
   const bodyBox = new THREE.Box3().setFromObject(bodyMesh || obj);
 
@@ -649,44 +644,19 @@ function createBottleViewer(canvas, opts = {}) {
   controls.target.set(0, 0, 0);
   controls.update();
 
-  // ── Label decal (normal-clipped to the front) ──
+  // ── Label: baked into the body's UV texture (so it's just part of the surface) ──
   const raycaster = new THREE.Raycaster();
   raycaster.far = 30;
-  const labelDirU = { value: new THREE.Vector3(1, 0, 0) };
-  const decalMat = new THREE.MeshPhysicalMaterial({
-    transparent: true, depthTest: true, depthWrite: false,
-    polygonOffset: true, polygonOffsetFactor: -6,
-    roughness: 0.45, metalness: 0, clearcoat: 0.3, side: THREE.FrontSide,
-  });
-  decalMat.onBeforeCompile = (shader) => {
-    shader.uniforms.uLabelDir = labelDirU;
-    shader.vertexShader = 'varying highp vec3 vLabelN;\n' + shader.vertexShader.replace(
-      '#include <beginnormal_vertex>',
-      '#include <beginnormal_vertex>\n  vLabelN = normalize(mat3(modelMatrix) * objectNormal);'
-    );
-    shader.fragmentShader = 'uniform highp vec3 uLabelDir;\nvarying highp vec3 vLabelN;\n' + shader.fragmentShader.replace(
-      '#include <clipping_planes_fragment>',
-      '#include <clipping_planes_fragment>\n  if (dot(normalize(vLabelN), normalize(uLabelDir)) < 0.25) discard;'
-    );
-  };
-  decalMat.customProgramCacheKey = () => 'label-normal-clip';
-
-  // Plain material for the pruned-geometry fallback decal (no clip shader, no highp).
-  const decalMatFlat = new THREE.MeshStandardMaterial({
-    transparent: true, depthTest: true, depthWrite: false,
-    polygonOffset: true, polygonOffsetFactor: -1, roughness: 0.5, metalness: 0,
-    envMapIntensity: 0.5, side: THREE.FrontSide,   // small offset → body occludes any back wrap
-  });
-
-  let labelTexture = null, labelAspect = 612 / 174, decalMesh = null;
+  let labelOverlay = null, labelTex = null, labelAspect = 612 / 174;
   let label = cfg.label || {};
 
+  // Rasterize the label SVG to a canvas (returns the canvas + aspect).
   function rasterizeSVG(svgText, done) {
     const vb = svgText.match(/viewBox\s*=\s*["']([\d.\-\s]+)["']/i);
-    let aspect = 612 / 174, vbW = 612, vbH = 174;
-    if (vb) { const p = vb[1].trim().split(/[\s,]+/).map(Number); vbW = p[2]; vbH = p[3]; aspect = vbW / vbH; }
+    let aspect = 612 / 174;
+    if (vb) { const p = vb[1].trim().split(/[\s,]+/).map(Number); aspect = p[2] / p[3]; }
     const cw = 1024, ch = Math.max(1, Math.round(1024 / aspect));
-    let svg = svgText
+    const svg = svgText
       .replace(/(<svg[^>]*?)\swidth\s*=\s*["'][^"']*["']/i, '$1')
       .replace(/(<svg[^>]*?)\sheight\s*=\s*["'][^"']*["']/i, '$1')
       .replace(/<svg/i, `<svg width="${cw}" height="${ch}"`);
@@ -696,18 +666,14 @@ function createBottleViewer(canvas, opts = {}) {
       const cnv = document.createElement('canvas'); cnv.width = cw; cnv.height = ch;
       cnv.getContext('2d').drawImage(img, 0, 0, cw, ch);
       URL.revokeObjectURL(url);
-      const tex = new THREE.CanvasTexture(cnv);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-      done(tex, aspect);
+      done(cnv, aspect);
     };
     img.onerror = () => URL.revokeObjectURL(url);
     img.src = url;
   }
 
-  // Drop decal triangles whose surface normal faces away from the label direction.
-  // This bakes the desktop clip-shader's front-only behaviour into the geometry on
-  // the CPU, so a plain material renders it correctly on any GPU (no wrap poke-through).
+  // Drop decal triangles whose surface normal faces away from the label direction —
+  // bakes the front-only clip into the geometry on the CPU (device-independent).
   function pruneDecalBack(geo, dir, thr) {
     const p = geo.attributes.position, nr = geo.attributes.normal, uv = geo.attributes.uv;
     const P = [], N = [], U = [];
@@ -715,7 +681,7 @@ function createBottleViewer(canvas, opts = {}) {
       let nx = 0, ny = 0, nz = 0;
       for (let k = 0; k < 3; k++) { nx += nr.getX(t + k); ny += nr.getY(t + k); nz += nr.getZ(t + k); }
       const l = Math.hypot(nx, ny, nz) || 1;
-      if ((nx / l) * dir.x + (ny / l) * dir.y + (nz / l) * dir.z < thr) continue;   // back-facing → drop
+      if ((nx / l) * dir.x + (ny / l) * dir.y + (nz / l) * dir.z < thr) continue;
       for (let k = 0; k < 3; k++) {
         P.push(p.getX(t + k), p.getY(t + k), p.getZ(t + k));
         N.push(nr.getX(t + k), nr.getY(t + k), nr.getZ(t + k));
@@ -730,70 +696,55 @@ function createBottleViewer(canvas, opts = {}) {
     return g;
   }
 
-  function placeDecal() {
-    if (decalMesh) { decalMesh.removeFromParent(); decalMesh.geometry.dispose(); decalMesh = null; }
-    if (!labelTexture || !bodyMesh || label.visible === false) return;
+  // Project the label onto the body's front faces (DecalGeometry generates the correct
+  // UVs — the OBJ's own UVs are degenerate on the front), prune the back, and parent it
+  // to the body so it rides the surface and spins with the whole bottle. One path for
+  // every device: plain textured material, no clip shader, no per-frame work.
+  function buildLabelMesh() {
+    if (labelOverlay) { labelOverlay.removeFromParent(); labelOverlay.geometry.dispose(); labelOverlay.material.dispose(); labelOverlay = null; }
+    if (!labelTex || !bodyMesh || label.visible === false) return;
     bodyMesh.updateMatrixWorld(true);
     bodyBox.setFromObject(bodyMesh);
-
     const a = (label.angle || 0) * Math.PI / 180;
     const dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
-    labelDirU.value.copy(dir);
     const y = THREE.MathUtils.lerp(bodyBox.min.y + 0.02, bodyBox.max.y - 0.02, (label.y ?? 46) / 100);
     const cx = (bodyBox.min.x + bodyBox.max.x) / 2, cz = (bodyBox.min.z + bodyBox.max.z) / 2;
-    const origin = new THREE.Vector3(cx + dir.x * 10, y, cz + dir.z * 10);
-
-    raycaster.set(origin, dir.clone().negate());
+    raycaster.set(new THREE.Vector3(cx + dir.x * 10, y, cz + dir.z * 10), dir.clone().negate());
     const hits = raycaster.intersectObject(bodyMesh, true);
     if (!hits.length) return;
     const hit = hits[0];
     const n = (hit.face ? hit.face.normal.clone() : dir.clone()).transformDirection(bodyMesh.matrixWorld).normalize();
-
     const dummy = new THREE.Object3D();
     dummy.position.copy(hit.point);
     dummy.lookAt(hit.point.clone().add(n));
     dummy.rotateZ((label.rot || 0) * Math.PI / 180);
-
-    const w = (label.size ?? 70) / 100;
-    const h = w / labelAspect;
+    const w = (label.size ?? 70) / 100, h = w / labelAspect;
     const surfR = (hit.point.x - cx) * dir.x + (hit.point.z - cz) * dir.z;
     const depth = Math.min(surfR * 1.7, Math.max(0.25, w * 0.7));
-
     let geo = new DecalGeometry(bodyMesh, hit.point, dummy.rotation, new THREE.Vector3(w, h, depth));
-    const mat = labelFallback ? decalMatFlat : decalMat;   // plain material on mobile, clip shader on desktop
-    // Mobile has no clip shader, so bake the front-only clip into the geometry by
-    // dropping back-facing triangles on the CPU (device-independent — no poke-through).
-    if (labelFallback) geo = pruneDecalBack(geo, dir, 0.33);
-    mat.opacity = (label.opacity ?? 100) / 100;
-    mat.roughness = (label.finish ?? 45) / 100;
-    decalMesh = new THREE.Mesh(geo, mat);
-    decalMesh.renderOrder = 2;
-    // Lock the decal to the bottle so it spins with it (bake the parent's inverse).
-    spinGroup.updateWorldMatrix(true, false);
-    decalMesh.applyMatrix4(spinGroup.matrixWorld.clone().invert());
-    spinGroup.add(decalMesh);
-    const dq = new THREE.Quaternion(); spinGroup.getWorldQuaternion(dq);
-    const localDir = dir.clone().applyQuaternion(dq.clone().invert()).normalize();
-    decalLocalDir = labelFallback ? null : localDir;
-    if (labelFallback) {
-      // Rotate the bottle so the label faces the camera; the gentle turn in animate()
-      // oscillates around this so the label stays centered (never sweeps to the back).
-      const camAng = Math.atan2(camera.position.z, camera.position.x);
-      const locAng = Math.atan2(localDir.z, localDir.x);
-      labelBaseAngle = locAng - camAng;
-      spinGroup.rotation.y = labelBaseAngle;
-      spinGroup.updateWorldMatrix(true, false);
-    }
+    geo = pruneDecalBack(geo, dir, 0.25);
+    const mat = new THREE.MeshStandardMaterial({
+      map: labelTex, transparent: true, depthWrite: false, side: THREE.FrontSide,
+      roughness: (label.finish ?? 45) / 100, metalness: 0, envMapIntensity: 0.5,
+      opacity: (label.opacity ?? 100) / 100, polygonOffset: true, polygonOffsetFactor: -2,
+    });
+    labelOverlay = new THREE.Mesh(geo, mat);
+    labelOverlay.renderOrder = 2;
+    bodyMesh.updateWorldMatrix(true, false);
+    labelOverlay.applyMatrix4(bodyMesh.matrixWorld.clone().invert());   // world decal → body-local (rides the body)
+    bodyMesh.add(labelOverlay);
   }
 
   function applyLabelTexture(svgText) {
-    if (!svgText) { placeDecal(); return; }
-    rasterizeSVG(svgText, (tex, aspect) => {
-      if (labelTexture) labelTexture.dispose();
-      labelTexture = tex; labelAspect = aspect;
-      decalMat.map = labelTexture; decalMat.needsUpdate = true;
-      decalMatFlat.map = labelTexture; decalMatFlat.needsUpdate = true;
-      placeDecal();
+    if (labelOverlay) { labelOverlay.removeFromParent(); labelOverlay.geometry.dispose(); labelOverlay.material.dispose(); labelOverlay = null; }
+    if (labelTex) { labelTex.dispose(); labelTex = null; }
+    if (!svgText || !bodyMesh || label.visible === false) return;
+    rasterizeSVG(svgText, (cnv, aspect) => {
+      labelAspect = aspect;
+      labelTex = new THREE.CanvasTexture(cnv);
+      labelTex.colorSpace = THREE.SRGBColorSpace;
+      labelTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      buildLabelMesh();
     });
   }
   applyLabelTexture(label.svg);
@@ -801,7 +752,6 @@ function createBottleViewer(canvas, opts = {}) {
   // ── Resize + loop ──
   let raf = 0, disposed = false;
   const spinClock = new THREE.Clock();
-  const _q = new THREE.Quaternion();
   function resize() {
     const w = canvas.clientWidth || canvas.parentElement?.clientWidth || 1;
     const h = canvas.clientHeight || canvas.parentElement?.clientHeight || 1;
@@ -816,19 +766,7 @@ function createBottleViewer(canvas, opts = {}) {
   function animate() {
     if (disposed) return;
     const dt = spinClock.getDelta();
-    if (spinning) {
-      spinPhase += dt;
-      if (labelFallback) {
-        // Gentle turn that keeps the label facing the camera (never sweeps to the back).
-        spinGroup.rotation.y = labelBaseAngle + 0.55 * Math.sin(spinPhase * 0.7);
-      } else {
-        spinGroup.rotation.y += 0.8 * dt;          // desktop: full tilted-axis spin
-        if (decalLocalDir) {                        // keep the label's front-clip aligned as it turns
-          spinGroup.getWorldQuaternion(_q);
-          labelDirU.value.copy(decalLocalDir).applyQuaternion(_q);
-        }
-      }
-    }
+    if (spinning) spinGroup.rotation.y += 0.8 * dt;   // whole bottle spins on the tilted axis
     controls.update();
     renderer.render(scene, camera);
     raf = requestAnimationFrame(animate);
