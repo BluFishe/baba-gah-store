@@ -57,6 +57,7 @@ body:not(.rock-native) #rockScroll { display: none; }
   background: none; border-bottom: none;
 }
 .nav-logo { height: 30px; opacity: 1; cursor: pointer; }
+.nav-idol { width: 48px; height: 48px; display: block; cursor: pointer; }
 .nav-wordmark { width: 168px; height: 46px; opacity: 1; display: none; cursor: pointer; }
 .nav-links { display: flex; gap: 6px; }
 .nav-link {
@@ -278,6 +279,7 @@ body:not(.rock-native) #rockScroll { display: none; }
   .nav { max-width: 960px; margin: 0 auto; padding: 0 48px; }
   .nav-wordmark { display: block; }
   .nav-logo { height: 38px; }
+  .nav-idol { width: 58px; height: 58px; }
   .bag-btn { width: 54px; height: 54px; }
   .bag-icon { width: 50px; height: 50px; }
 }
@@ -1845,6 +1847,18 @@ function NavWordmark({
     "aria-label": "baba-gah"
   });
 }
+// Spinning chalk idol used as the nav logo
+function NavIdol() {
+  const ref = use3DViewer('__mountChalk', {
+    interactive: false,
+    autoRotate: true
+  });
+  return /*#__PURE__*/React.createElement("canvas", {
+    ref: ref,
+    className: "nav-idol",
+    "aria-label": "baba-gah"
+  });
+}
 // Behind-the-frame model: its canvas lives in #model-layer (between sky and rock),
 // tracks its parent panel's rect and is oversized by `expand` so its rectangular
 // edges hide behind the frayed rock border and it appears set into the window.
@@ -1973,11 +1987,7 @@ function Nav({
       cursor: 'pointer'
     },
     onClick: scrollToTop
-  }, /*#__PURE__*/React.createElement("img", {
-    src: "baba-logo.svg",
-    alt: "baba-gah",
-    className: "nav-logo"
-  }), /*#__PURE__*/React.createElement(NavWordmark, {
+  }, /*#__PURE__*/React.createElement(NavIdol, null), /*#__PURE__*/React.createElement(NavWordmark, {
     className: "nav-wordmark"
   })), /*#__PURE__*/React.createElement(NavWordmark, {
     className: "nav-mark",
