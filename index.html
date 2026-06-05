@@ -402,6 +402,7 @@ body:not(.rock-native) #rockScroll { display: none; }
 <script src="bottle-obj.js"></script>
 <script src="bottle-config.js"></script>
 <script src="baba-mesh.js"></script>
+<script src="halfbaba-mesh.js"></script>
 <script src="baba-wordmark.js"></script>
 <script type="importmap">
 { "imports": {
@@ -1852,7 +1853,8 @@ function NavIdol() {
   const ref = use3DViewer('__mountChalk', {
     interactive: false,
     autoRotate: true,
-    ring: false
+    ring: false,
+    mesh: window.HALFBABA_MESH
   });
   return /*#__PURE__*/React.createElement("canvas", {
     ref: ref,
