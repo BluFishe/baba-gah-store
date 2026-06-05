@@ -967,7 +967,7 @@ function createWordmarkViewer(canvas, opts = {}) {
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   renderer.toneMappingExposure = 1.0;
-  const camera = new THREE.PerspectiveCamera(26, 4, 1, 4000);
+  const camera = new THREE.PerspectiveCamera(26, 4, 0.01, 100);
   // Match the idol viewer's lighting (the orbiting ring uses the same wordmark).
   const key = new THREE.DirectionalLight(0xfff4e6, 1.1); key.position.set(4, 6, 5); scene.add(key);
   const rim = new THREE.DirectionalLight(0xcfe0ff, 0.45); rim.position.set(-5, 3, -4); scene.add(rim);
@@ -977,8 +977,13 @@ function createWordmarkViewer(canvas, opts = {}) {
     const paths = new SVGLoader().parse(window.BABA_WORDMARK_SVG).paths;
     const shapes = [];
     paths.forEach(p => SVGLoader.createShapes(p).forEach(s => shapes.push(s)));
-    let g = new THREE.ExtrudeGeometry(shapes, { depth: 44, bevelEnabled: true, bevelThickness: 7, bevelSize: 5, bevelSegments: 2, curveSegments: 6 });
+    // Match the idol ring's wordmark build (same extrude + local scale) so the
+    // chalk grain reads identically — the noise is keyed to local vertex scale.
+    let g = new THREE.ExtrudeGeometry(shapes, { depth: 48, bevelEnabled: true, bevelThickness: 7, bevelSize: 5, bevelSegments: 2, curveSegments: 4 });
     g.scale(1, -1, 1);                                 // SVG y-down → up
+    g.computeBoundingBox();
+    const sc = 1.91 / (g.boundingBox.max.x - g.boundingBox.min.x);   // ring's wordmark local width
+    g.scale(sc, sc, sc);
     g.computeBoundingBox();
     const b = g.boundingBox; mw = b.max.x - b.min.x; mh = b.max.y - b.min.y;
     g.translate(-(b.min.x + b.max.x) / 2, -(b.min.y + b.max.y) / 2, -(b.min.z + b.max.z) / 2);
