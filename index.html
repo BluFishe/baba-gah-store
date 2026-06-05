@@ -667,7 +667,9 @@ function createBottleViewer(canvas, opts = {}) {
 
   // Fallback for GPUs without fragment highp (the custom normal-clip shader is
   // unreliable there → garbled label). Use a plain front-facing plane instead.
-  const labelFallback = renderer.capabilities.precision !== 'highp';
+  const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')
+    || (navigator.maxTouchPoints > 1 && !window.matchMedia('(pointer:fine)').matches);
+  const labelFallback = renderer.capabilities.precision !== 'highp' || isMobile;
   const decalMatFlat = new THREE.MeshStandardMaterial({
     transparent: true, depthTest: true, depthWrite: false,
     polygonOffset: true, polygonOffsetFactor: -6, roughness: 0.45, metalness: 0, side: THREE.FrontSide,
