@@ -705,6 +705,31 @@ function createBottleViewer(canvas, opts = {}) {
     img.src = url;
   }
 
+  // Drop decal triangles whose surface normal faces away from the label direction.
+  // This bakes the desktop clip-shader's front-only behaviour into the geometry on
+  // the CPU, so a plain material renders it correctly on any GPU (no wrap poke-through).
+  function pruneDecalBack(geo, dir, thr) {
+    const p = geo.attributes.position, nr = geo.attributes.normal, uv = geo.attributes.uv;
+    const P = [], N = [], U = [];
+    for (let t = 0; t < p.count; t += 3) {
+      let nx = 0, ny = 0, nz = 0;
+      for (let k = 0; k < 3; k++) { nx += nr.getX(t + k); ny += nr.getY(t + k); nz += nr.getZ(t + k); }
+      const l = Math.hypot(nx, ny, nz) || 1;
+      if ((nx / l) * dir.x + (ny / l) * dir.y + (nz / l) * dir.z < thr) continue;   // back-facing → drop
+      for (let k = 0; k < 3; k++) {
+        P.push(p.getX(t + k), p.getY(t + k), p.getZ(t + k));
+        N.push(nr.getX(t + k), nr.getY(t + k), nr.getZ(t + k));
+        U.push(uv.getX(t + k), uv.getY(t + k));
+      }
+    }
+    geo.dispose();
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
+    return g;
+  }
+
   function placeDecal() {
     if (decalMesh) { decalMesh.removeFromParent(); decalMesh.geometry.dispose(); decalMesh = null; }
     if (!labelTexture || !bodyMesh || label.visible === false) return;
@@ -729,21 +754,16 @@ function createBottleViewer(canvas, opts = {}) {
     dummy.lookAt(hit.point.clone().add(n));
     dummy.rotateZ((label.rot || 0) * Math.PI / 180);
 
-    let w = (label.size ?? 70) / 100;
-    let h = w / labelAspect;
+    const w = (label.size ?? 70) / 100;
+    const h = w / labelAspect;
     const surfR = (hit.point.x - cx) * dir.x + (hit.point.z - cz) * dir.z;
-    let depth = Math.min(surfR * 1.7, Math.max(0.25, w * 0.7));
-    // Fallback has no clip shader to hide wrap, so the label must fit within the
-    // frontal arc: scale it down to the bottle's front width and use a shallow
-    // projection depth → it sits on the front and can't poke around to the back.
-    if (labelFallback) {
-      const wmax = surfR * 1.7;
-      if (w > wmax) { const k = wmax / w; w *= k; h *= k; }
-      depth = surfR * 0.6;
-    }
+    const depth = Math.min(surfR * 1.7, Math.max(0.25, w * 0.7));
 
-    const geo = new DecalGeometry(bodyMesh, hit.point, dummy.rotation, new THREE.Vector3(w, h, depth));
+    let geo = new DecalGeometry(bodyMesh, hit.point, dummy.rotation, new THREE.Vector3(w, h, depth));
     const mat = labelFallback ? decalMatFlat : decalMat;   // plain material on mobile, clip shader on desktop
+    // Mobile has no clip shader, so bake the front-only clip into the geometry by
+    // dropping back-facing triangles on the CPU (device-independent — no poke-through).
+    if (labelFallback) geo = pruneDecalBack(geo, dir, 0.33);
     mat.opacity = (label.opacity ?? 100) / 100;
     mat.roughness = (label.finish ?? 45) / 100;
     decalMesh = new THREE.Mesh(geo, mat);
