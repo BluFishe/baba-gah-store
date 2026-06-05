@@ -589,7 +589,13 @@ function createBottleViewer(canvas, opts = {}) {
   controls.enablePan = false;
   controls.enabled = interactive;
   controls.autoRotate = false;
-  const spinning = !!opts.autoRotate;   // spin the bottle itself, on a tilted axis (not the camera)
+  // Mobile / no-highp GPUs garble the clip shader, so the label uses CPU-pruned
+  // decal geometry. On those devices we also render a STATIC, camera-facing product
+  // shot (no time-based spin) so the bottle looks identical on every phone.
+  const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')
+    || (navigator.maxTouchPoints > 1 && !window.matchMedia('(pointer:fine)').matches);
+  const labelFallback = renderer.capabilities.precision !== 'highp' || isMobile;
+  const spinning = !!opts.autoRotate && !labelFallback;   // spin (tilted axis) on capable devices only
 
   const key = new THREE.DirectionalLight(0xfff2dd, cfg.scene?.keyLight ?? 1.2);
   key.position.set(4, 6, 5); scene.add(key);
@@ -665,13 +671,7 @@ function createBottleViewer(canvas, opts = {}) {
   };
   decalMat.customProgramCacheKey = () => 'label-normal-clip';
 
-  // Mobile / no-highp GPUs garble the custom normal-clip shader above. The fallback
-  // reuses the SAME DecalGeometry projection (which already restricts to the front
-  // shell via its box depth — no per-fragment clip needed) but with a plain stock
-  // material: no onBeforeCompile, no highp varyings → renders correctly everywhere.
-  const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')
-    || (navigator.maxTouchPoints > 1 && !window.matchMedia('(pointer:fine)').matches);
-  const labelFallback = renderer.capabilities.precision !== 'highp' || isMobile;
+  // Plain material for the pruned-geometry fallback decal (no clip shader, no highp).
   const decalMatFlat = new THREE.MeshStandardMaterial({
     transparent: true, depthTest: true, depthWrite: false,
     polygonOffset: true, polygonOffsetFactor: -1, roughness: 0.5, metalness: 0,
@@ -773,7 +773,15 @@ function createBottleViewer(canvas, opts = {}) {
     decalMesh.applyMatrix4(spinGroup.matrixWorld.clone().invert());
     spinGroup.add(decalMesh);
     const dq = new THREE.Quaternion(); spinGroup.getWorldQuaternion(dq);
-    decalLocalDir = labelFallback ? null : dir.clone().applyQuaternion(dq.clone().invert()).normalize();
+    const localDir = dir.clone().applyQuaternion(dq.clone().invert()).normalize();
+    decalLocalDir = labelFallback ? null : localDir;
+    if (labelFallback) {
+      // Static product shot: rotate the bottle so the label faces the camera → centered.
+      const camAng = Math.atan2(camera.position.z, camera.position.x);
+      const locAng = Math.atan2(localDir.z, localDir.x);
+      spinGroup.rotation.y = locAng - camAng;
+      spinGroup.updateWorldMatrix(true, false);
+    }
   }
 
   function applyLabelTexture(svgText) {
