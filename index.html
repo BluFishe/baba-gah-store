@@ -672,7 +672,8 @@ function createBottleViewer(canvas, opts = {}) {
   const labelFallback = renderer.capabilities.precision !== 'highp' || isMobile;
   const decalMatFlat = new THREE.MeshStandardMaterial({
     transparent: true, depthTest: true, depthWrite: false,
-    polygonOffset: true, polygonOffsetFactor: -6, roughness: 0.45, metalness: 0, side: THREE.FrontSide,
+    polygonOffset: true, polygonOffsetFactor: -6, roughness: 0.7, metalness: 0,
+    envMapIntensity: 0.15, side: THREE.FrontSide,    // keep the black ink crisp, not env-greyed
   });
 
   let labelTexture = null, labelAspect = 612 / 174, decalMesh = null;
@@ -755,16 +756,25 @@ function createBottleViewer(canvas, opts = {}) {
   // axis convention. Deterministic across GPUs, wraps the curve, perfectly
   // upright, no raycast, no per-fragment projection shader.
   function buildStripLabel(a) {
+    const dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a)), negDir = dir.clone().negate();
     const cx = (bodyBox.min.x + bodyBox.max.x) / 2, cz = (bodyBox.min.z + bodyBox.max.z) / 2;
-    const R = Math.max(bodyBox.max.x - bodyBox.min.x, bodyBox.max.z - bodyBox.min.z) / 2 + 0.012;
     const yc = THREE.MathUtils.lerp(bodyBox.min.y + 0.02, bodyBox.max.y - 0.02, (label.y ?? 46) / 100);
     const w = (label.size ?? 70) / 100, h = w / labelAspect;
-    const segs = 32, arc = Math.min(w / Math.max(R, 1e-3), Math.PI * 0.9);
+    const Rfallback = Math.max(bodyBox.max.x - bodyBox.min.x, bodyBox.max.z - bodyBox.min.z) / 2;
+    // True surface radius at a given height (one CPU raycast — robust, not the GPU bug).
+    const radiusAt = (yy) => {
+      raycaster.set(new THREE.Vector3(cx + dir.x * 10, yy, cz + dir.z * 10), negDir);
+      const hh = raycaster.intersectObject(bodyMesh, true);
+      return (hh.length ? (hh[0].point.x - cx) * dir.x + (hh[0].point.z - cz) * dir.z : Rfallback) + 0.012;
+    };
+    const Rbot = radiusAt(yc - h / 2), Rtop = radiusAt(yc + h / 2), Rmid = (Rbot + Rtop) / 2;
+    const segs = 32, arc = Math.min(w / Math.max(Rmid, 1e-3), Math.PI * 0.9);
     const pos = [], uv = [], nor = [], idx = [];
     for (let i = 0; i <= segs; i++) {
       const t = i / segs, th = a + (t - 0.5) * arc;
       const c = Math.cos(th), s = Math.sin(th);
       for (let j = 0; j < 2; j++) {
+        const R = j ? Rtop : Rbot;
         pos.push(cx + R * c, yc + (j - 0.5) * h, cz + R * s);
         nor.push(c, 0, s); uv.push(1 - t, j);
       }
