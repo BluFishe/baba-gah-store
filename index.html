@@ -179,7 +179,7 @@ body:not(.rock-native) #rockScroll { display: none; }
 .details-list li { font-size: 12px; color: var(--stone-text-dim); padding: 8px 0; border-bottom: 1px solid var(--stone-border); display: flex; gap: 10px; }
 .details-list li span { color: var(--gold); font-size: 10px; opacity: 0.6; min-width: 18px; }
 .buy-price { font-family: var(--display); font-size: clamp(34px, 4.8vw, 44px); font-weight: 500; color: var(--stone-text-bright); margin-bottom: 20px; }
-.price-cur { font-size: 0.5em; font-weight: 500; color: var(--stone-text-dim); letter-spacing: 0.06em; margin-left: 5px; vertical-align: 0.12em; }
+.price-cur { font-size: 0.5em; font-weight: 500; color: var(--stone-text-dim); letter-spacing: 0.06em; margin-left: 5px; }
 .section-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #fff; font-weight: 800; font-family: var(--body); margin-bottom: 20px; }
 
 .qty-row { display: flex; gap: 10px; align-items: stretch; margin-bottom: 16px; }
@@ -299,7 +299,7 @@ body:not(.rock-native) #rockScroll { display: none; }
   }
 }
 .eyebrow { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #fff; opacity: 1; font-weight: 800; margin-bottom: 14px; font-family: var(--body); }
-.stock-row { margin-top: -8px; margin-bottom: 20px; }   /* sits just under the price */
+.stock-row { margin-top: -8px; margin-bottom: 20px; display: flex; align-items: center; }   /* sits just under the price; dot centered with text */
 /* embedded gemstone "stud" — CSS port of the frames builder spheroid shading
    (hemisphere diffuse from an upper-left light + Blinn specular hot-spot +
    fresnel rim + contact shadow seating it into the surface) */
