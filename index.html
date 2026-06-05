@@ -223,6 +223,10 @@ body:not(.rock-native) #rockScroll { display: none; }
 .about-img { background: rgba(14,16,22,0.5); border: 1px solid var(--stone-border); aspect-ratio: 16/9; margin-bottom: 28px; display: flex; align-items: center; justify-content: center; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--stone-text-dim); }
 .about-epigraph { font-size: 20px; margin-bottom: 28px; }
 .about-title { font-family: var(--display); font-weight: 600; font-size: clamp(34px,5.5vw,58px); color: var(--stone-text-bright); line-height: 1.05; margin-bottom: 20px; text-transform: capitalize; }
+.story-toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; background: none; border: none; padding: 0; cursor: pointer; text-align: left; }
+.story-caret { color: var(--stone-text-bright); font-size: clamp(22px,3vw,32px); line-height: 1; transition: transform 0.25s ease; flex: 0 0 auto; }
+.story-caret.open { transform: rotate(180deg); }
+.story-body { margin-top: 22px; }
 .about-text { font-size: clamp(14px,1.5vw,16px); color: #fff; line-height: 1.6; margin-bottom: 16px; max-width: 64ch; }
 .manifesto { list-style: none; margin-top: 32px; }
 .manifesto li { font-family: var(--display); font-size: 20px; font-weight: 500; color: var(--stone-text); line-height: 1.3; padding: 15px 0; border-bottom: 1px solid var(--stone-border); }
@@ -2086,6 +2090,10 @@ function StoreScreen({
   const v = PRODUCT.variants[0];
   const heroRef = useRef(null);
   const endRef = useRef(null);
+  const [storyOpen, setStoryOpen] = useState(false);
+  useEffect(() => {
+    window.dispatchEvent(new Event('resize'));
+  }, [storyOpen]); // re-bake rock on toggle
   const steps = [{
     n: '01',
     t: 'a dime per palm',
@@ -2159,45 +2167,33 @@ function StoreScreen({
     className: "section",
     id: "story"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "buy-grid",
-    style: {
-      marginBottom: 24
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "cut-panel",
-    "data-rock": "cut",
-    style: {
-      aspectRatio: '3/4'
-    }
-  }, /*#__PURE__*/React.createElement(PanelModel, {
-    mount: "__mountChalk"
-  })), /*#__PURE__*/React.createElement("div", {
-    className: "recess-panel hero-text",
+    className: "recess-panel",
     "data-rock": "recess"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "about-title"
-  }, "the story"), /*#__PURE__*/React.createElement("p", {
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "story-toggle",
+    onClick: () => setStoryOpen(o => !o),
+    "aria-expanded": storyOpen
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "about-title",
+    style: {
+      marginBottom: 0
+    }
+  }, "the story"), /*#__PURE__*/React.createElement("span", {
+    className: `story-caret ${storyOpen ? 'open' : ''}`
+  }, "\u25BE")), storyOpen && /*#__PURE__*/React.createElement("div", {
+    className: "story-body"
+  }, /*#__PURE__*/React.createElement("p", {
     className: "about-text"
   }, F.about_1), /*#__PURE__*/React.createElement("p", {
     className: "about-text"
   }, F.about_2), /*#__PURE__*/React.createElement("p", {
     className: "about-text"
-  }, F.about_3))), /*#__PURE__*/React.createElement("div", {
-    className: "recess-panel",
-    "data-rock": "recess",
-    style: {
-      padding: '16px 24px',
-      marginBottom: 20
-    }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, F.about_3), /*#__PURE__*/React.createElement("div", {
     className: "about-epigraph cf",
     style: {
-      marginBottom: 0
+      margin: '22px 0'
     }
-  }, F.cuneiform.aboutEpigraph)), /*#__PURE__*/React.createElement("div", {
-    className: "recess-panel",
-    "data-rock": "recess"
-  }, /*#__PURE__*/React.createElement("ul", {
+  }, F.cuneiform.aboutEpigraph), /*#__PURE__*/React.createElement("ul", {
     className: "manifesto"
   }, F.manifesto.map((m, i) => /*#__PURE__*/React.createElement("li", {
     key: i
@@ -2205,7 +2201,7 @@ function StoreScreen({
     className: "closing-mantra"
   }, /*#__PURE__*/React.createElement("span", {
     className: "cf"
-  }, F.cuneiform.mantra), /*#__PURE__*/React.createElement("em", null, F.mantra)))), /*#__PURE__*/React.createElement("div", {
+  }, F.cuneiform.mantra), /*#__PURE__*/React.createElement("em", null, F.mantra))))), /*#__PURE__*/React.createElement("div", {
     className: "section"
   }, /*#__PURE__*/React.createElement("div", {
     className: "recess-panel",
