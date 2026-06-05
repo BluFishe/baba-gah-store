@@ -749,15 +749,15 @@ function createBottleViewer(canvas, opts = {}) {
     decalLocalDir = dir.clone().applyQuaternion(dq.clone().invert()).normalize();
   }
 
-  // Curved cylindrical label band, derived purely from the body geometry's local
-  // bounding box → deterministic across all GPUs, wraps the curve, perfectly
-  // upright (vertical edges are world-up). Parented to bodyMesh so it spins with it.
+  // Curved cylindrical label band, built in WORLD space from the body's world
+  // bounding box (around the world-up vertical axis), then baked into spinGroup
+  // — exactly the frame the decal uses, so it's immune to the model's local
+  // axis convention. Deterministic across GPUs, wraps the curve, perfectly
+  // upright, no raycast, no per-fragment projection shader.
   function buildStripLabel(a) {
-    if (!bodyMesh.geometry.boundingBox) bodyMesh.geometry.computeBoundingBox();
-    const bb = bodyMesh.geometry.boundingBox;
-    const cx = (bb.min.x + bb.max.x) / 2, cz = (bb.min.z + bb.max.z) / 2;
-    const R = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) / 2 + 0.012;
-    const yc = THREE.MathUtils.lerp(bb.min.y + 0.02, bb.max.y - 0.02, (label.y ?? 46) / 100);
+    const cx = (bodyBox.min.x + bodyBox.max.x) / 2, cz = (bodyBox.min.z + bodyBox.max.z) / 2;
+    const R = Math.max(bodyBox.max.x - bodyBox.min.x, bodyBox.max.z - bodyBox.min.z) / 2 + 0.012;
+    const yc = THREE.MathUtils.lerp(bodyBox.min.y + 0.02, bodyBox.max.y - 0.02, (label.y ?? 46) / 100);
     const w = (label.size ?? 70) / 100, h = w / labelAspect;
     const segs = 32, arc = Math.min(w / Math.max(R, 1e-3), Math.PI * 0.9);
     const pos = [], uv = [], nor = [], idx = [];
@@ -780,7 +780,10 @@ function createBottleViewer(canvas, opts = {}) {
     decalMatFlat.side = THREE.DoubleSide;
     const m = new THREE.Mesh(g, decalMatFlat);
     m.renderOrder = 2;
-    bodyMesh.add(m);
+    m.updateMatrix();
+    spinGroup.updateWorldMatrix(true, false);
+    m.applyMatrix4(spinGroup.matrixWorld.clone().invert());
+    spinGroup.add(m);
     decalMesh = m;
     decalLocalDir = null;
   }
