@@ -15,6 +15,10 @@ body { background: #0c0c0f; font-family: Arial, Helvetica, sans-serif; color: #f
 #skyCanvas { position: fixed; top: -1px; left: -1px; width: calc(100vw + 2px); height: calc(100vh + 2px); z-index: 0; }
 #rockCanvas { position: fixed; top: -1px; left: -1px; width: calc(100vw + 2px); height: calc(100vh + 2px); z-index: 2; }
 #model-layer { position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+/* Stone fill revealed behind a bottom overscroll (instead of the sky); only at the page end */
+#overFill { position: fixed; left: 0; bottom: 0; width: 100%; height: 60vh; z-index: 2; pointer-events: none; display: none;
+  background: linear-gradient(180deg, #494d54 0%, #34373d 45%, #24262b 100%); }
+body.at-bottom #overFill { display: block; }
 /* Desktop native-scroll rock: pre-rendered full-height canvas that scrolls with .content */
 #rockScroll { position: absolute; top: 0; left: -8px; width: calc(100% + 16px); height: 0; z-index: -1; pointer-events: none; display: block; }
 body.rock-native #rockCanvas { display: none; }
@@ -392,6 +396,7 @@ body:not(.rock-native) #rockScroll { display: none; }
 <body>
 <canvas id="skyCanvas"></canvas>
 <canvas id="rockCanvas"></canvas>
+<div id="overFill"></div>
 <div id="model-layer"></div>
 <div id="app-root"></div>
 
@@ -1677,8 +1682,8 @@ window.dispatchEvent(new Event('viewers-ready'));
     const docW = contentEl.clientWidth, docH = inner ? inner.offsetHeight : contentEl.scrollHeight;
     if (docW < 2 || docH < 2) return false;
     const OVERSCAN = 8;                          // CSS px each side — hides the shader's edge fade
-    const TOP_OVER = 400, BOTTOM_OVER = 0;    // extra rock above the content (nav). No bottom overscan:
-    // the absolute #rockScroll canvas would otherwise add that as scrollable blank space.
+    const TOP_OVER = 400, BOTTOM_OVER = 0;    // no bottom overscan (it would add scrollable blank space);
+    // a fixed #overFill behind the content covers the sky during a bottom overscroll instead.
     const totalW = docW + 2*OVERSCAN, totalH = docH + TOP_OVER + BOTTOM_OVER;
     let dpr = Math.min(window.devicePixelRatio || 1, 2);
     dpr = Math.min(dpr, tall.MAX/totalW, tall.MAX/totalH, 16384/totalH);   // clamp to texture + memory budget
@@ -1739,8 +1744,15 @@ window.dispatchEvent(new Event('viewers-ready'));
   // Listen for resize, scroll (fixed mode only), and content-height mutations.
   function hookDirtyListeners() {
     const contentEl = document.querySelector('.content');
+    // Flag when scrolled to the very bottom so the fixed #overFill (stone) shows behind a
+    // bottom overscroll instead of the sky. Capture-phase scroll on window catches the
+    // .content scroll even if it mounts after this runs; re-query .content each call.
+    const atBottom = () => { const c = document.querySelector('.content');
+      if (c) document.body.classList.toggle('at-bottom', c.scrollTop + c.clientHeight >= c.scrollHeight - 2); };
+    window.addEventListener('scroll', atBottom, true);
     if (contentEl) contentEl.addEventListener('scroll', () => { if (mode !== 'native') markDirty(); }, { passive: true });
-    window.addEventListener('resize', markDirty);
+    window.addEventListener('resize', () => { markDirty(); atBottom(); });
+    [300, 800, 1500, 2600].forEach(t => setTimeout(atBottom, t));
     const obs = new MutationObserver(() => {
       if (mode === 'native') { const cv = document.getElementById('rockScroll'); const inn = cv && cv.nextElementSibling; if (inn && inn.offsetHeight !== lastBuiltDocH) markDirty(); }
       else markDirty();
