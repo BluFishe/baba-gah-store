@@ -733,6 +733,10 @@ function createBottleViewer(canvas, opts = {}) {
     bodyMesh.updateWorldMatrix(true, false);
     labelOverlay.applyMatrix4(bodyMesh.matrixWorld.clone().invert());   // world decal → body-local (rides the body)
     bodyMesh.add(labelOverlay);
+    // Start the spin with the label facing the camera (centered first impression).
+    const q = new THREE.Quaternion(); spinGroup.getWorldQuaternion(q);
+    const localDir = dir.clone().applyQuaternion(q.invert());
+    spinGroup.rotation.y = Math.atan2(localDir.z, localDir.x) - Math.atan2(camera.position.z, camera.position.x);
   }
 
   function applyLabelTexture(svgText) {
