@@ -1855,21 +1855,6 @@ const F = {
     aboutEpigraph: '\u{12337}\u{1217E} \u00b7 \u{12157}\u{12292} \u{12000}\u{12120}\u{1223E} \u{12047}\u{12292} \u00b7 \u{12326}\u{12000}\u{12120} \u{12261}\u{12326}'
   }
 };
-
-// EDITABLE \u2014 confirm these claims before publishing
-const BENEFITS = [{
-  t: 'Dries in seconds',
-  s: 'High-purity isopropanol flashes off clean. No tacky residue, no waiting on the wall.',
-  icon: 'stopwatch.png'
-}, {
-  t: 'Made in small batches',
-  s: 'Ground, mixed, and bottled by hand in a toronto garage. Small batches, made with love.',
-  icon: 'heart.png'
-}, {
-  t: 'Nothing but chalk',
-  s: '75% isopropanol, 25% magnesium carbonate. No fillers, no fragrance, no rosin.',
-  icon: 'powder.png'
-}];
 function scrollToTop() {
   const c = document.querySelector('.content');
   if (c) c.scrollTo({
@@ -2068,21 +2053,6 @@ function StoreScreen({
     className: "add-btn",
     onClick: () => addToCart(v)
   }, "add to bag $", v.price))), /*#__PURE__*/React.createElement("div", {
-    className: "section"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "benefits"
-  }, BENEFITS.map((b, i) => /*#__PURE__*/React.createElement("div", {
-    className: "benefit",
-    key: i
-  }, b.icon && /*#__PURE__*/React.createElement("img", {
-    src: b.icon,
-    alt: "",
-    className: "benefit-icon"
-  }), /*#__PURE__*/React.createElement("div", {
-    className: "benefit-title"
-  }, b.t), /*#__PURE__*/React.createElement("div", {
-    className: "benefit-sub"
-  }, b.s))))), /*#__PURE__*/React.createElement("div", {
     className: "section"
   }, /*#__PURE__*/React.createElement("div", {
     className: "recess-panel",
