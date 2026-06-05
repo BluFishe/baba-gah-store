@@ -674,8 +674,8 @@ function createBottleViewer(canvas, opts = {}) {
   const labelFallback = renderer.capabilities.precision !== 'highp' || isMobile;
   const decalMatFlat = new THREE.MeshStandardMaterial({
     transparent: true, depthTest: true, depthWrite: false,
-    polygonOffset: true, polygonOffsetFactor: -6, roughness: 0.5, metalness: 0,
-    envMapIntensity: 0.5, side: THREE.FrontSide,
+    polygonOffset: true, polygonOffsetFactor: -1, roughness: 0.5, metalness: 0,
+    envMapIntensity: 0.5, side: THREE.FrontSide,   // small offset → body occludes any back wrap
   });
 
   let labelTexture = null, labelAspect = 612 / 174, decalMesh = null;
@@ -729,10 +729,18 @@ function createBottleViewer(canvas, opts = {}) {
     dummy.lookAt(hit.point.clone().add(n));
     dummy.rotateZ((label.rot || 0) * Math.PI / 180);
 
-    const w = (label.size ?? 70) / 100;
-    const h = w / labelAspect;
+    let w = (label.size ?? 70) / 100;
+    let h = w / labelAspect;
     const surfR = (hit.point.x - cx) * dir.x + (hit.point.z - cz) * dir.z;
-    const depth = Math.min(surfR * 1.7, Math.max(0.25, w * 0.7));
+    let depth = Math.min(surfR * 1.7, Math.max(0.25, w * 0.7));
+    // Fallback has no clip shader to hide wrap, so the label must fit within the
+    // frontal arc: scale it down to the bottle's front width and use a shallow
+    // projection depth → it sits on the front and can't poke around to the back.
+    if (labelFallback) {
+      const wmax = surfR * 1.7;
+      if (w > wmax) { const k = wmax / w; w *= k; h *= k; }
+      depth = surfR * 0.6;
+    }
 
     const geo = new DecalGeometry(bodyMesh, hit.point, dummy.rotation, new THREE.Vector3(w, h, depth));
     const mat = labelFallback ? decalMatFlat : decalMat;   // plain material on mobile, clip shader on desktop
