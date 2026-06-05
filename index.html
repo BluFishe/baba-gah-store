@@ -1001,26 +1001,26 @@ function createWordmarkViewer(canvas, opts = {}) {
     camera.position.set(0, 0, Math.max(distH, distW));
     camera.lookAt(0, 0, 0);
   }
+  // Still, head-on (mark stays at rotation 0). Render a few frames then idle;
+  // re-render on resize / when it becomes visible.
   let raf = 0, disposed = false;
+  function renderN(n) {
+    cancelAnimationFrame(raf); let i = 0;
+    (function step() {
+      if (disposed) return;
+      if (canvas.clientWidth) { renderer.render(scene, camera); i++; }   // skip/poll while hidden
+      if (i < n) raf = requestAnimationFrame(step);
+    })();
+  }
   function resize() {
     const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1;
     renderer.setSize(w, h, false);
     camera.aspect = w / h; camera.updateProjectionMatrix(); frame();
+    renderN(8);
   }
   const ro = new ResizeObserver(resize); ro.observe(canvas);
   if (canvas.parentElement) ro.observe(canvas.parentElement);
   resize();
-
-  const clock = new THREE.Clock();
-  function animate() {
-    if (disposed) return;
-    raf = requestAnimationFrame(animate);
-    if (!canvas.clientWidth) return;                   // skip while hidden
-    const t = clock.getElapsedTime();
-    if (mark) mark.rotation.y = 0.18 * Math.sin(t * 0.9);   // slight oscillation
-    renderer.render(scene, camera);
-  }
-  animate();
   return { dispose() { disposed = true; cancelAnimationFrame(raf); ro.disconnect(); renderer.dispose(); } };
 }
 
