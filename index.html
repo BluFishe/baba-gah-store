@@ -16,7 +16,7 @@ body { background: #0c0c0f; font-family: Arial, Helvetica, sans-serif; color: #f
 #rockCanvas { position: fixed; top: -1px; left: -1px; width: calc(100vw + 2px); height: calc(100vh + 2px); z-index: 2; }
 #model-layer { position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
 /* Desktop native-scroll rock: pre-rendered full-height canvas that scrolls with .content */
-#rockScroll { position: absolute; top: 0; left: 0; width: 100%; height: 0; z-index: -1; pointer-events: none; display: block; }
+#rockScroll { position: absolute; top: 0; left: -8px; width: calc(100% + 16px); height: 0; z-index: -1; pointer-events: none; display: block; }
 body.rock-native #rockCanvas { display: none; }
 body:not(.rock-native) #rockScroll { display: none; }
 
@@ -48,7 +48,7 @@ body:not(.rock-native) #rockScroll { display: none; }
   z-index: 0; pointer-events: none; display: block;
 }
 .rock-frame > :not(canvas) { position: relative; z-index: 1; }
-.nav-wrap { z-index: 100; flex-shrink: 0; box-shadow: 0 -1px 8px rgba(0,0,0,0.5), 0 4px 24px rgba(0,0,0,0.32), 0 2px 0 rgba(70,76,88,0.5) inset, 0 -3px 0 rgba(0,0,0,0.3) inset; }
+.nav-wrap { position: relative; z-index: 100; flex-shrink: 0; margin-bottom: -4px; box-shadow: 0 -1px 8px rgba(0,0,0,0.5), 0 4px 24px rgba(0,0,0,0.32), 0 2px 0 rgba(70,76,88,0.5) inset, 0 -3px 0 rgba(0,0,0,0.3) inset; }
 .gallery-frame { border-radius: 4px; overflow: hidden; }
 .nav {
   position: relative; z-index: 1;
@@ -85,7 +85,8 @@ body:not(.rock-native) #rockScroll { display: none; }
   display: flex; align-items: center; justify-content: center; padding: 0 4px;
 }
 
-.content { flex: 1; overflow-y: auto; overflow-x: hidden; position: relative; }
+.content { flex: 1; overflow-y: auto; overflow-x: hidden; position: relative; scrollbar-width: none; -ms-overflow-style: none; }
+.content::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .section { padding: 48px 32px; max-width: 960px; margin: 0 auto; }
 
 /* Panels that the shader carves around */
@@ -1536,10 +1537,10 @@ window.dispatchEvent(new Event('viewers-ready'));
   let lastBuiltDocH = -1;
   function markDirty() { rockDirty = true; }
 
-  const DESKTOP_MIN = 760;
   let mode = null;                 // 'native' | 'fixed'
-  let tall = null;                 // { g, hP, sP, vao, t0, t1, fbo, cw, ch, MAX }
-  function desiredMode(){ return window.innerWidth >= DESKTOP_MIN ? 'native' : 'fixed'; }
+  let tall = null;                 // { g, hP, sP, vao, t0, t1, fbo, cw, ch, MAX, builtKey }
+  let forceFixed = false;          // sticky: set if this device can't hold the tall buffer
+  function desiredMode(){ return forceFixed ? 'fixed' : 'native'; }   // native on all sizes
   function applyMode(){
     const want = desiredMode();
     if (want === mode) return;
@@ -1559,13 +1560,13 @@ window.dispatchEvent(new Event('viewers-ready'));
   }
 
   // Panels in DOCUMENT space (so they bake at absolute Y and scroll with the content).
-  function collectPanelsDoc(W,H,docW,docH,contentEl){
+  function collectPanelsDoc(W,H,docW,docH,contentEl,OVERSCAN,TOP_OVER){
     const panels=[]; const cr=contentEl.getBoundingClientRect(); const st=contentEl.scrollTop;
-    const sx=W/docW, sy=H/docH;
+    const sx=W/(docW+2*OVERSCAN), sy=H/(docH+TOP_OVER);
     document.querySelectorAll('[data-rock]').forEach(el=>{
       if(panels.length>=16) return;
       const r=el.getBoundingClientRect();
-      const x=(r.left-cr.left)*sx, y=((r.top-cr.top)+st)*sy, w=r.width*sx, h=r.height*sy;
+      const x=((r.left-cr.left)+OVERSCAN)*sx, y=((r.top-cr.top)+st+TOP_OVER)*sy, w=r.width*sx, h=r.height*sy;
       const pad=8*sx;
       panels.push({x:x-pad,y:y-pad,w:w+pad*2,h:h+pad*2,type:el.dataset.rock});
     });
@@ -1582,11 +1583,18 @@ window.dispatchEvent(new Event('viewers-ready'));
     const g = tall.g;
     const docW = contentEl.clientWidth, docH = contentEl.scrollHeight;
     if (docW < 2 || docH < 2) return false;
+    const OVERSCAN = 8;                          // CSS px each side — hides the shader's edge fade
+    const TOP_OVER = 400;                        // extra rock above the content top (behind nav / mobile overscroll)
+    const totalW = docW + 2*OVERSCAN, totalH = docH + TOP_OVER;
     let dpr = Math.min(window.devicePixelRatio || 1, 2);
-    dpr = Math.min(dpr, tall.MAX/docW, tall.MAX/docH, 8192/docH);   // clamp to texture + memory budget
+    dpr = Math.min(dpr, tall.MAX/totalW, tall.MAX/totalH, 16384/totalH);   // clamp to texture + memory budget
     if (dpr < 0.25) return 'fallback';
-    const W = Math.max(2, Math.round(docW*dpr)), H = Math.max(2, Math.round(docH*dpr));
-    c.width=W; c.height=H; c.style.height=docH+'px';
+    const W = Math.max(2, Math.round(totalW*dpr)), H = Math.max(2, Math.round(totalH*dpr));
+    const key = W+'x'+H+'_'+Math.round(docH);
+    if (key === tall.builtKey) return true;   // unchanged — skip re-bake (e.g. mobile address-bar resize)
+    c.width=W; c.height=H;
+    c.style.width = totalW+'px'; c.style.left = (-OVERSCAN)+'px';
+    c.style.height = totalH+'px'; c.style.top = (-TOP_OVER)+'px';
     if (tall.cw!==W || tall.ch!==H) {
       if (tall.t0){ g.deleteTexture(tall.t0); g.deleteTexture(tall.t1); g.deleteFramebuffer(tall.fbo); }
       const mk=()=>{const t=g.createTexture();g.bindTexture(g.TEXTURE_2D,t);g.texImage2D(g.TEXTURE_2D,0,g.RGBA16F,W,H,0,g.RGBA,g.HALF_FLOAT,null);g.texParameteri(g.TEXTURE_2D,g.TEXTURE_MIN_FILTER,g.NEAREST);g.texParameteri(g.TEXTURE_2D,g.TEXTURE_MAG_FILTER,g.NEAREST);g.texParameteri(g.TEXTURE_2D,g.TEXTURE_WRAP_S,g.CLAMP_TO_EDGE);g.texParameteri(g.TEXTURE_2D,g.TEXTURE_WRAP_T,g.CLAMP_TO_EDGE);return t;};
@@ -1597,7 +1605,7 @@ window.dispatchEvent(new Event('viewers-ready'));
       g.bindFramebuffer(g.FRAMEBUFFER,null);
       tall.cw=W; tall.ch=H;
     }
-    const panels=collectPanelsDoc(W,H,docW,docH,contentEl);
+    const panels=collectPanelsDoc(W,H,docW,docH,contentEl,OVERSCAN,TOP_OVER);
     const U=(p,n,t,v)=>{const l=g.getUniformLocation(p,n);if(!l)return;if(t==='1i')g.uniform1i(l,v);else if(t==='1f')g.uniform1f(l,v);else if(t==='2f')g.uniform2f(l,v[0],v[1]);else if(t==='3f')g.uniform3f(l,v[0],v[1],v[2]);else if(t==='4f')g.uniform4f(l,v[0],v[1],v[2],v[3]);};
     const C=ROCK_CFG.primary, M=C.mat, Lt=C.light;
     g.bindVertexArray(tall.vao);
@@ -1630,7 +1638,7 @@ window.dispatchEvent(new Event('viewers-ready'));
     g.clearColor(0,0,0,0);g.clear(g.COLOR_BUFFER_BIT);
     g.drawArrays(g.TRIANGLE_STRIP,0,4);
     g.bindVertexArray(null);
-    lastBuiltDocH = docH;
+    lastBuiltDocH = docH; tall.builtKey = key;
     return true;
   }
 
@@ -1660,7 +1668,7 @@ window.dispatchEvent(new Event('viewers-ready'));
       if (rockDirty) {
         const r = buildTall();
         renderSlabs();
-        if (r === 'fallback') { document.body.classList.remove('rock-native'); mode = 'fixed'; rockDirty = true; }
+        if (r === 'fallback') { forceFixed = true; rockDirty = true; }   // applyMode() switches to fixed next frame
         else if (r === true) rockDirty = false;   // false = not ready → stay dirty, retry next frame
       }
     } else {
