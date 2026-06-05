@@ -299,7 +299,8 @@ body:not(.rock-native) #rockScroll { display: none; }
   }
 }
 .eyebrow { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #fff; opacity: 1; font-weight: 800; margin-bottom: 14px; font-family: var(--body); }
-.stock-row { margin-top: -8px; margin-bottom: 20px; display: flex; align-items: center; }   /* sits just under the price; dot centered with text */
+.stock-row { margin-top: -8px; margin-bottom: 20px; display: flex; align-items: center; gap: 9px; }   /* sits just under the price; dot centered + spaced from text */
+.stock-row .stud { margin-right: 0; }
 /* embedded gemstone "stud" — CSS port of the frames builder spheroid shading
    (hemisphere diffuse from an upper-left light + Blinn specular hot-spot +
    fresnel rim + contact shadow seating it into the surface) */
