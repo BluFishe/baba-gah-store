@@ -109,6 +109,7 @@ body:not(.rock-native) #rockScroll { display: none; }
 .hero-visual { aspect-ratio: 3/4; width: 100%; }
 .hero-text { display: flex; flex-direction: column; justify-content: center; }
 .hero h1 { font-family: var(--display); font-weight: 500; font-size: clamp(42px,8vw,78px); line-height: 0.92; color: var(--stone-text-bright); letter-spacing: -1px; margin-bottom: 20px; }
+.hero h1::first-letter { text-transform: uppercase; }   /* "Liquid chalk." */
 .hero h1 em { font-style: italic; color: #598ce0; }
 .hero-kicker { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--stone-text-dim); margin-bottom: 20px; }
 .hero-tagline { font-family: var(--display); font-style: italic; font-size: 16px; color: var(--stone-text-dim); margin-bottom: 12px; line-height: 1.4; }
