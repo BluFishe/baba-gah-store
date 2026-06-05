@@ -733,7 +733,12 @@ function createBottleViewer(canvas, opts = {}) {
       decalMatFlat.opacity = (label.opacity ?? 100) / 100;
       decalMatFlat.roughness = (label.finish ?? 45) / 100;
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), decalMatFlat);
-      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
+      // Upright basis: +Z faces outward (n), +Y aligned to world up — matches the
+      // decal's orientation so the label isn't rolled/tilted.
+      const zx = n.clone();
+      const xx = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), zx).normalize();
+      const yx = new THREE.Vector3().crossVectors(zx, xx).normalize();
+      m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xx, yx, zx));
       m.rotateZ((label.rot || 0) * Math.PI / 180);
       m.position.copy(hit.point).addScaledVector(n, 0.012);
       m.renderOrder = 2;
