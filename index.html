@@ -57,7 +57,7 @@ body:not(.rock-native) #rockScroll { display: none; }
   background: none; border-bottom: none;
 }
 .nav-logo { height: 30px; opacity: 1; cursor: pointer; }
-.nav-idol { width: 48px; height: 48px; display: block; cursor: pointer; }
+.nav-idol { width: 96px; height: 50px; display: block; cursor: pointer; }
 .nav-wordmark { width: 168px; height: 46px; opacity: 1; display: none; cursor: pointer; }
 .nav-links { display: flex; gap: 6px; }
 .nav-link {
@@ -279,7 +279,7 @@ body:not(.rock-native) #rockScroll { display: none; }
   .nav { max-width: 960px; margin: 0 auto; padding: 0 48px; }
   .nav-wordmark { display: block; }
   .nav-logo { height: 38px; }
-  .nav-idol { width: 58px; height: 58px; }
+  .nav-idol { width: 124px; height: 56px; }
   .bag-btn { width: 54px; height: 54px; }
   .bag-icon { width: 50px; height: 50px; }
 }
@@ -924,9 +924,22 @@ function createChalkViewer(canvas, opts = {}) {
   // Frame the camera
   const size = bb.getSize(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z);
-  const dist = maxDim / (2 * Math.tan(camera.fov * Math.PI / 360)) * (opts.ring === false ? 1.25 : 1.85);
-  camera.position.set(0, size.y * 0.05, dist);
+  const navMode = opts.ring === false;          // nav idol: fill the (wide) canvas, no ring
+  const oscillate = !!opts.oscillate;
+  controls.autoRotate = controls.autoRotate && !oscillate;
+  function frameCam() {
+    const vF = camera.fov * Math.PI / 360;
+    if (navMode) {                               // aspect-aware fit so a wide canvas shows a big idol
+      const distH = (size.y / 2 * 1.15) / Math.tan(vF);
+      const distW = (size.x / 2 * 1.1) / Math.tan(vF) / camera.aspect;
+      camera.position.set(0, 0, Math.max(distH, distW));
+    } else {
+      camera.position.set(0, size.y * 0.05, maxDim / (2 * Math.tan(vF)) * 1.85);
+    }
+    camera.lookAt(0, 0, 0);
+  }
   controls.target.set(0, 0, 0);
+  frameCam();
   controls.update();
 
   let raf = 0, disposed = false;
@@ -934,7 +947,7 @@ function createChalkViewer(canvas, opts = {}) {
     const w = canvas.clientWidth || canvas.parentElement?.clientWidth || 1;
     const h = canvas.clientHeight || canvas.parentElement?.clientHeight || 1;
     renderer.setSize(w, h, false);
-    camera.aspect = w / h; camera.updateProjectionMatrix();
+    camera.aspect = w / h; camera.updateProjectionMatrix(); frameCam();
   }
   const ro = new ResizeObserver(resize);
   ro.observe(canvas);
@@ -944,6 +957,7 @@ function createChalkViewer(canvas, opts = {}) {
   const ringClock = new THREE.Clock();
   function animate() {
     if (disposed) return;
+    if (oscillate) idol.rotation.y = 0.55 * Math.sin(ringClock.getElapsedTime() * 1.05);   // rock side to side
     if (wordRing) wordRing.rotation.y += ringClock.getDelta() * 0.35;   // orbit
     controls.update();
     renderer.render(scene, camera);
@@ -1852,7 +1866,7 @@ function NavWordmark({
 function NavIdol() {
   const ref = use3DViewer('__mountChalk', {
     interactive: false,
-    autoRotate: true,
+    oscillate: true,
     ring: false,
     mesh: window.HALFBABA_MESH
   });
