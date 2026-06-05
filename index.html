@@ -595,7 +595,7 @@ function createBottleViewer(canvas, opts = {}) {
   const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')
     || (navigator.maxTouchPoints > 1 && !window.matchMedia('(pointer:fine)').matches);
   const labelFallback = renderer.capabilities.precision !== 'highp' || isMobile;
-  const spinning = !!opts.autoRotate && !labelFallback;   // spin (tilted axis) on capable devices only
+  const spinning = !!opts.autoRotate;   // desktop spins on a tilted axis; mobile spins upright (set below)
 
   const key = new THREE.DirectionalLight(0xfff2dd, cfg.scene?.keyLight ?? 1.2);
   key.position.set(4, 6, 5); scene.add(key);
@@ -636,7 +636,7 @@ function createBottleViewer(canvas, opts = {}) {
   tiltGroup.add(spinGroup);
   spinGroup.add(obj);
   scene.add(tiltGroup);
-  if (spinning) tiltGroup.rotation.z = THREE.MathUtils.degToRad(20);
+  if (spinning && !labelFallback) tiltGroup.rotation.z = THREE.MathUtils.degToRad(20);   // mobile stays upright
   let decalLocalDir = null;
 
   const bodyBox = new THREE.Box3().setFromObject(bodyMesh || obj);
