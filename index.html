@@ -876,7 +876,7 @@ function createChalkViewer(canvas, opts = {}) {
   // ── Orbiting 3D wordmark ring (babagah.svg extruded, bent into a circle) ──
   let wordRing = null;
   try {
-    if (window.BABA_WORDMARK_SVG) {
+    if (opts.ring !== false && window.BABA_WORDMARK_SVG) {
       const idolBox = geo.boundingBox;
       const idolH = idolBox.max.y - idolBox.min.y;
       const idolR = Math.max(idolBox.max.x - idolBox.min.x, idolBox.max.z - idolBox.min.z) / 2;
@@ -923,7 +923,7 @@ function createChalkViewer(canvas, opts = {}) {
   // Frame the camera
   const size = bb.getSize(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z);
-  const dist = maxDim / (2 * Math.tan(camera.fov * Math.PI / 360)) * 1.85;
+  const dist = maxDim / (2 * Math.tan(camera.fov * Math.PI / 360)) * (opts.ring === false ? 1.25 : 1.85);
   camera.position.set(0, size.y * 0.05, dist);
   controls.target.set(0, 0, 0);
   controls.update();
@@ -1851,7 +1851,8 @@ function NavWordmark({
 function NavIdol() {
   const ref = use3DViewer('__mountChalk', {
     interactive: false,
-    autoRotate: true
+    autoRotate: true,
+    ring: false
   });
   return /*#__PURE__*/React.createElement("canvas", {
     ref: ref,
