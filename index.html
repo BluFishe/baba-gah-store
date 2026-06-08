@@ -2200,14 +2200,22 @@ function StoreScreen({
   }, /*#__PURE__*/React.createElement("div", {
     className: "recess-panel",
     "data-rock": "recess"
-  }, /*#__PURE__*/React.createElement("ul", {
-    className: "manifesto",
-    style: {
-      marginTop: 0
-    }
-  }, F.manifesto.map((m, i) => /*#__PURE__*/React.createElement("li", {
-    key: i
-  }, m))))), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "steps"
+  }, F.manifesto.map((m, i) => {
+    const x = m.match(/^(\d+)\.\s*(.*)$/);
+    return /*#__PURE__*/React.createElement("div", {
+      className: "step",
+      key: i
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "step-num"
+    }, x ? x[1] : String(i + 1)), /*#__PURE__*/React.createElement("span", {
+      className: "step-title",
+      style: {
+        marginBottom: 0
+      }
+    }, x ? x[2] : m));
+  })))), /*#__PURE__*/React.createElement("div", {
     className: "section",
     id: "story"
   }, /*#__PURE__*/React.createElement("div", {
