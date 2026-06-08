@@ -2200,20 +2200,14 @@ function StoreScreen({
   }, /*#__PURE__*/React.createElement("div", {
     className: "recess-panel",
     "data-rock": "recess"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "section-label"
-  }, "how to use it"), /*#__PURE__*/React.createElement("div", {
-    className: "steps"
-  }, steps.map(st => /*#__PURE__*/React.createElement("div", {
-    className: "step",
-    key: st.n
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "step-num"
-  }, st.n), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    className: "step-title"
-  }, st.t), /*#__PURE__*/React.createElement("div", {
-    className: "step-desc"
-  }, st.s))))))), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("ul", {
+    className: "manifesto",
+    style: {
+      marginTop: 0
+    }
+  }, F.manifesto.map((m, i) => /*#__PURE__*/React.createElement("li", {
+    key: i
+  }, m))))), /*#__PURE__*/React.createElement("div", {
     className: "section",
     id: "story"
   }, /*#__PURE__*/React.createElement("div", {
@@ -2243,11 +2237,7 @@ function StoreScreen({
     style: {
       margin: '22px 0'
     }
-  }, F.cuneiform.aboutEpigraph), /*#__PURE__*/React.createElement("ul", {
-    className: "manifesto"
-  }, F.manifesto.map((m, i) => /*#__PURE__*/React.createElement("li", {
-    key: i
-  }, m))), /*#__PURE__*/React.createElement("div", {
+  }, F.cuneiform.aboutEpigraph), /*#__PURE__*/React.createElement("div", {
     className: "closing-mantra"
   }, /*#__PURE__*/React.createElement("span", {
     className: "cf"
